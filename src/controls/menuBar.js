@@ -78,6 +78,7 @@ export function initMenuBar(actions) {
   const bar  = document.getElementById('menu-bar')
   if (!wrap || !bar) return
   if (window.api.platform === 'darwin') return // stays hidden — native menu owns macOS
+  // Web always shows the in-app menu (platform === 'web').
 
   wrap.classList.remove('hidden')
 
@@ -106,7 +107,9 @@ export function initMenuBar(actions) {
       closeAll()
       if (!wasActive) {
         item.classList.add('active')
-        if (item.dataset.menu === 'file') _renderRecentProjects(recentContainer, recentSeparator, actions)
+        if (item.dataset.menu === 'file' && window.api.platform !== 'web') {
+          _renderRecentProjects(recentContainer, recentSeparator, actions)
+        }
       }
     })
   })

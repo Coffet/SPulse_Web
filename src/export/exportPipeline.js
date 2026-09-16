@@ -9,6 +9,8 @@ import { exportSettings }   from './exportSettings.js'
 import { showErrorDialog }  from '../ui/errorDialog.js'
 import { visualizerState }  from '../visualizer/visualizerState.js'
 import { analyzeOffline }   from '../audio/offlineFrequencyAnalyser.js'
+import { isWeb }            from '../platform/webApi.js'
+import { startWebExport }   from './webRecorder.js'
 
 // Silence fallback for any export frame whose real FFT data wasn't captured
 // (export cancelled mid-analysis, or a rendering edge case at the very end of
@@ -36,6 +38,8 @@ export function isExporting() {
 }
 
 export async function startExport() {
+  if (isWeb()) return startWebExport()
+
   const appState = window.appState
   if (!appState?.loaded) return
   // Guard against re-entrant calls (double-click, Ctrl+E while exporting) —

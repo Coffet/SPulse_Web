@@ -29,8 +29,8 @@
   --color-accent-glow:  rgba(0, 212, 255, 0.35);
 
   --color-text-primary:   #E6EDF3;
-  --color-text-secondary: #8B949E;
-  --color-text-muted:     #484F58;
+  --color-text-secondary: #A8B2BE;
+  --color-text-muted:     #6E7681;
   --color-destructive:    #FF6B35;
 
   --color-canvas-bg: #090d12;
@@ -44,7 +44,7 @@
   --radius-md: 6px;
   --radius-lg: 8px;
 
-  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
 
   --transition-fast: 100ms ease;
@@ -951,3 +951,75 @@ html, body {
 .mt-8  { margin-top: 8px; }
 .ml-8  { margin-left: 8px; }
 .w-full { width: 100%; }
+
+/* ─── Keyboard / a11y ─────────────────────────────────────────────────────── */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+input, textarea, select, [contenteditable] {
+  user-select: text;
+}
+
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -40px;
+  z-index: 200;
+  padding: 8px 12px;
+  background: var(--color-accent);
+  color: #052028;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+.skip-link:focus {
+  top: 8px;
+}
+
+.web-session-bar {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-panel-bg));
+  border-bottom: 1px solid color-mix(in srgb, var(--color-accent) 35%, var(--color-panel-border));
+  color: var(--color-text-primary);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* Browser layout: overlay side panels on narrower viewports so the preview stays usable. */
+@media (max-width: 960px) {
+  body[data-platform="web"] .app-layout {
+    grid-template-columns: 1fr !important;
+  }
+  body[data-platform="web"] .left-panel,
+  body[data-platform="web"] .right-panel {
+    position: absolute;
+    top: 0;
+    bottom: var(--transport-height);
+    z-index: 8;
+    width: min(280px, 88vw);
+    max-width: 320px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  }
+  body[data-platform="web"] .left-panel { left: 0; }
+  body[data-platform="web"] .right-panel { right: 0; }
+  body[data-platform="web"] .left-panel.collapsed,
+  body[data-platform="web"] .right-panel.collapsed {
+    opacity: 0;
+    pointer-events: none;
+  }
+  body[data-platform="web"] .panel-toggle {
+    width: 22px;
+    height: 48px;
+  }
+}

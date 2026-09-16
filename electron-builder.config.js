@@ -39,6 +39,9 @@ module.exports = {
     'preload.js',
     'src/**/*',
     'node_modules/**/*',
+    '!server.js',
+    '!node_modules/express/**',
+    '!node_modules/compression/**',
     '!node_modules/**/{CHANGELOG.md,README.md,*.map,test,tests,__tests__,coverage}',
     '!src/fonts/'
   ],

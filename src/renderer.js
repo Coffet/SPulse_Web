@@ -11,12 +11,14 @@ import { textOverlay }          from './overlay/textOverlay.js'
 import { initOverlayControls }  from './controls/overlayControls.js'
 import { initMenuBar }          from './controls/menuBar.js'
 import { startExport }               from './export/exportPipeline.js'
+import { applyWebExportLimitsToDom, capWebExport } from './export/webRecorder.js'
 import { exportSettings, resetExportSettingsToDefaults } from './export/exportSettings.js'
 import { serializeState, deserializeState, serializePortableState } from './project/projectManager.js'
 import { historyManager }                  from './history/historyManager.js'
 import { initErrorDialog }                 from './ui/errorDialog.js'
 import { initAboutScreen, showAbout }      from './ui/aboutScreen.js'
 import { initUpdateBanner, checkForUpdatesManually } from './ui/updateBanner.js'
+import { ensurePlatformApi, isWeb }        from './platform/webApi.js'
 import { drawBarMirror }   from './visualizer/modes/barMirror.js'
 import { drawLineSmooth }  from './visualizer/modes/lineSmooth.js'
 import { drawLineFill }    from './visualizer/modes/lineFill.js'
@@ -32,6 +34,14 @@ export const appState = {
   analyser:    null,   // AudioAnalyser instance — real-time FFT
 }
 window.appState = appState   // expose for non-module script interop if needed
+
+ensurePlatformApi()
+
+function _defaultProjectHint() {
+  return isWeb()
+    ? 'Refresh discards this session — Ctrl+S downloads a project'
+    : 'Ctrl+S to save'
+}
 
 // ─── Project state ────────────────────────────────────────────────────────────
 let _projectFilePath = null   // path of the currently open .spx file
@@ -84,12 +94,12 @@ const overlayTitle  = document.getElementById('overlay-title')
 const overlayArtist = document.getElementById('overlay-artist')
 
 // ─── Load audio from ArrayBuffer + file path ─────────────────────────────────
-async function loadAudio(arrayBuffer, filePath) {
+async function loadAudio(arrayBuffer, filePath, displayName) {
   _setDropMessage('⟳ Decoding…', true)
 
   try {
     const loader = new AudioLoader()
-    await loader.load(arrayBuffer, filePath)
+    await loader.load(arrayBuffer, displayName || filePath)
 
     const analyser = new AudioAnalyser(loader.audioContext)
     analyser.setBuffer(loader.audioBuffer)
@@ -97,7 +107,7 @@ async function loadAudio(arrayBuffer, filePath) {
 
     appState.loaded      = true
     appState.filePath    = filePath
-    appState.fileName    = loader.fileName
+    appState.fileName    = displayName || loader.fileName
     appState.audioLoader = loader
     appState.analyser    = analyser
 
@@ -118,7 +128,7 @@ async function loadAudio(arrayBuffer, filePath) {
 
     // Suggest default output filename and sync exportSettings
     const baseName = loader.fileName.replace(/\.[^.]+$/, '')
-    const defaultFilename = `${baseName}-spulse.mp4`
+    const defaultFilename = isWeb() ? `${baseName}-spulse.webm` : `${baseName}-spulse.mp4`
     if (outputFilename) outputFilename.value = defaultFilename
     exportSettings.filename    = defaultFilename
     exportSettings.outputPath  = ''   // clear any previous explicit path
@@ -130,7 +140,7 @@ async function loadAudio(arrayBuffer, filePath) {
     // Clear a lingering "Audio not found" warning (see _applyProjectData) now that a
     // file loaded successfully — this is the audio re-link flow completing.
     const hint = document.getElementById('project-hint')
-    if (hint?.textContent.startsWith('Audio not found')) hint.textContent = 'Ctrl+S to save'
+    if (hint?.textContent.startsWith('Audio not found')) hint.textContent = _defaultProjectHint()
   } catch (err) {
     console.error('Audio decode failed:', err)
     _setDropMessage('✕ Could not decode file', false)
@@ -151,7 +161,9 @@ function _updateMetaUI(loader) {
 function _enableTransport(duration) {
   btnPlay.disabled   = false
   btnExport.disabled = false
-  exportHint.textContent = 'Ready to export'
+  exportHint.textContent = isWeb()
+    ? 'Records in real time · desktop app exports MP4 faster'
+    : 'Ready to export'
   timeTotal.textContent  = _fmtTime(duration)
   timeCurrent.textContent = '0:00'
 }
@@ -408,7 +420,8 @@ dropZone.addEventListener('drop', async e => {
   }
 
   const arrayBuffer = await file.arrayBuffer()
-  await loadAudio(arrayBuffer, window.api.getPathForFile(file) || file.name)
+  const objectUrl = window.api.getPathForFile?.(file)
+  await loadAudio(arrayBuffer, objectUrl || file.name, file.name)
 })
 
 // ─── File picker (button + Ctrl+O) ───────────────────────────────────────────
@@ -419,7 +432,7 @@ async function _openFilePicker() {
   // result.buffer arrives as Uint8Array via structured clone (contextBridge)
   const u8  = result.buffer instanceof Uint8Array ? result.buffer : new Uint8Array(Object.values(result.buffer))
   const ab  = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength)
-  await loadAudio(ab, result.filePath)
+  await loadAudio(ab, result.filePath, result.fileName)
 }
 
 btnOpenAudio.addEventListener('click', _openFilePicker)
@@ -435,7 +448,10 @@ document.addEventListener('keydown', e => {
   if (ctrl && e.key === 'e') { e.preventDefault(); if (appState.loaded) { _pauseForExport(); startExport() } }
   if (ctrl && e.key === 'z') { e.preventDefault(); _undo() }
   if (ctrl && e.key === 'y') { e.preventDefault(); _redo() }
-  if (ctrl && e.key === 'q') { e.preventDefault(); window.api.quit() }
+  if (ctrl && e.key === 'q') {
+    e.preventDefault()
+    if (!isWeb()) window.api.quit()
+  }
   if (e.key === 'F11') { e.preventDefault(); _toggleFullscreen() }
 
   if (e.key === ' ' && !e.target.matches('input, textarea, select')) {
@@ -738,16 +754,21 @@ function _syncDomFromState(vs, es) {
 
 // ─── Project: save ────────────────────────────────────────────────────────────
 async function _saveProject() {
-  // Always suggest a .spx name — _projectFilePath may be a .spulse path if the
-  // currently-open project was imported rather than loaded, and Save always
-  // produces the local (non-portable) format regardless of how it was opened.
-  const defaultPath = _projectFilePath
-    ? _projectFilePath.replace(/\.(spx|spulse)$/i, '') + '.spx'
-    : (appState.fileName
-        ? appState.fileName.replace(/\.[^.]+$/, '') + '.spx'
-        : 'project.spx')
-  const data      = serializeState(appState.filePath || '')
-  const savedPath = await window.api.saveProject(data, defaultPath)
+  const defaultPath = isWeb()
+    ? (appState.fileName
+        ? appState.fileName.replace(/\.[^.]+$/, '') + '.spulse'
+        : 'project.spulse')
+    : (_projectFilePath
+        ? _projectFilePath.replace(/\.(spx|spulse)$/i, '') + '.spx'
+        : (appState.fileName
+            ? appState.fileName.replace(/\.[^.]+$/, '') + '.spx'
+            : 'project.spx'))
+  const data = isWeb()
+    ? await serializePortableState(appState.filePath || '')
+    : serializeState(appState.filePath || '')
+  const savedPath = isWeb()
+    ? await window.api.exportProject(data, defaultPath)
+    : await window.api.saveProject(data, defaultPath)
   if (!savedPath) return   // user cancelled
   _projectFilePath = savedPath
   _clearDirty()
@@ -755,7 +776,7 @@ async function _saveProject() {
   window.api.recordRecentProject?.(savedPath)
   window.api.saveLastSession(_currentLastSessionPayload())
   const hint = document.getElementById('project-hint')
-  if (hint) { hint.textContent = 'Saved ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
+  if (hint) { hint.textContent = isWeb() ? 'Project downloaded ✓' : 'Saved ✓'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
 }
 
 // ─── Project: export (portable — see Feature C, base64-embedded assets) ───────
@@ -769,7 +790,7 @@ async function _exportProject() {
   const savedPath = await window.api.exportProject(data, defaultPath)
   if (!savedPath) return   // user cancelled
   const hint = document.getElementById('project-hint')
-  if (hint) { hint.textContent = 'Exported ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
+  if (hint) { hint.textContent = 'Exported ✓'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
 }
 
 // ─── Audio: reload from an explicit path (project restore, of any kind) ──────
@@ -787,7 +808,7 @@ async function _reloadAudioFromPath(audioPath) {
       ? audioResult.buffer
       : new Uint8Array(Object.values(audioResult.buffer))
     const ab = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength)
-    await loadAudio(ab, audioResult.filePath)
+    await loadAudio(ab, audioResult.filePath, audioResult.fileName)
   }
 }
 
@@ -819,6 +840,7 @@ async function _applyProjectData(projectPath, data, { recordRecent = true } = {}
   resetExportSettingsToDefaults()
 
   const { audioPath } = await deserializeState(data)
+  if (isWeb()) capWebExport(exportSettings)
   await _reloadAudioFromPath(audioPath)
 
   // Sync all DOM controls to the restored state
@@ -848,7 +870,7 @@ async function _loadProject() {
   if (!result) return   // user cancelled
   await _applyProjectData(result.filePath, result.data)
   const hint = document.getElementById('project-hint')
-  if (hint) { hint.textContent = 'Project loaded ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
+  if (hint) { hint.textContent = 'Project loaded ✓'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
 }
 
 // ─── Project: open from an OS-triggered file (double-click, "Open with", or a
@@ -864,7 +886,7 @@ async function _openProjectFile({ filePath, data }) {
   }
   await _applyProjectData(filePath, data)
   const hint = document.getElementById('project-hint')
-  if (hint) { hint.textContent = 'Project opened ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
+  if (hint) { hint.textContent = 'Project opened ✓'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
 }
 
 // ─── Project: import (portable — see Feature C, base64-embedded assets) ───────
@@ -874,10 +896,11 @@ async function _openProjectFile({ filePath, data }) {
 // _exportProject() vs _saveProject()).
 async function _importProject() {
   const result = await window.api.importProject()
-  if (!result) return   // user cancelled
+  if (!result) return false
   await _applyProjectData(result.filePath, result.data, { recordRecent: false })
   const hint = document.getElementById('project-hint')
-  if (hint) { hint.textContent = 'Project imported ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
+  if (hint) { hint.textContent = 'Project imported ✓'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
+  return true
 }
 
 // ─── Project: reset visualizer/export settings to their hardcoded defaults ────
@@ -891,7 +914,7 @@ function _resetToDefaults() {
   window.api.saveLastSession(_currentLastSessionPayload())
   _setDirty()
   const hint = document.getElementById('project-hint')
-  if (hint) { hint.textContent = 'Reset to default ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
+  if (hint) { hint.textContent = 'Reset to default ✓'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
 }
 
 // ─── Project: new session (unload audio + reset settings + clear project file) ─
@@ -917,6 +940,7 @@ function _newSession() {
   _updateTitleBar()
   const hint = document.getElementById('project-hint')
   if (hint) hint.textContent = 'New session ✓'
+  if (isWeb()) enterHome()
 }
 
 // ─── Register visualizer modes ────────────────────────────────────────────────
@@ -941,6 +965,64 @@ initOverlayControls(visualizerState.overlay)
 
 // ─── Wire export button ───────────────────────────────────────────────────────
 document.getElementById('btn-export')?.addEventListener('click', () => { _pauseForExport(); startExport() })
+
+function enterHome() {
+  const home = document.getElementById('home-screen')
+  const studio = document.getElementById('studio')
+  if (home) home.hidden = false
+  if (studio) studio.hidden = true
+  document.body.classList.add('home-active')
+  document.body.classList.remove('studio-active')
+  document.getElementById('web-session-bar')?.classList.add('hidden')
+  document.getElementById('skip-link')?.setAttribute('href', '#home-new')
+}
+
+function enterStudio() {
+  const home = document.getElementById('home-screen')
+  const studio = document.getElementById('studio')
+  if (home) home.hidden = true
+  if (studio) studio.hidden = false
+  document.body.classList.remove('home-active')
+  document.body.classList.add('studio-active')
+  if (isWeb()) document.getElementById('web-session-bar')?.classList.remove('hidden')
+  document.getElementById('skip-link')?.setAttribute('href', '#center-panel')
+  requestAnimationFrame(() => canvasEngine.refitPreview())
+}
+
+function applyWebChrome() {
+  if (!isWeb()) {
+    enterStudio()
+    return
+  }
+  document.body.dataset.platform = 'web'
+  document.querySelectorAll('.desktop-only').forEach(el => el.classList.add('hidden'))
+  const label = document.getElementById('btn-export-label')
+  if (label) label.textContent = 'Export video'
+  const exportHintEl = document.getElementById('export-hint')
+  if (exportHintEl && !appState.loaded) {
+    exportHintEl.textContent = 'Load an audio file to export WebM'
+  }
+  const hint = document.getElementById('project-hint')
+  if (hint) hint.textContent = _defaultProjectHint()
+  document.getElementById('about-web-note')?.classList.remove('hidden')
+  applyWebExportLimitsToDom()
+  enterHome()
+}
+
+window.addEventListener('beforeunload', e => {
+  if (!isWeb()) return
+  if (appState.loaded || _isDirty) {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+})
+
+applyWebChrome()
+
+document.getElementById('home-new')?.addEventListener('click', () => enterStudio())
+document.getElementById('home-import')?.addEventListener('click', async () => {
+  if (await _importProject()) enterStudio()
+})
 
 // ─── Wire right-panel export settings controls ────────────────────────────────
 function _initExportControls() {
@@ -1112,12 +1194,12 @@ initErrorDialog()
 initAboutScreen()
 
 // ─── Detect GPU encoders on startup ──────────────────────────────────────────
-window.api.detectGpuEncoders?.().then(info => {
-  if (info) { _detectedGpu = info; _updateEncoderBadge() }
-})
-
-// ─── Auto-update banner ───────────────────────────────────────────────────────
-initUpdateBanner()
+if (!isWeb()) {
+  window.api.detectGpuEncoders?.().then(info => {
+    if (info) { _detectedGpu = info; _updateEncoderBadge() }
+  })
+  initUpdateBanner()
+}
 
 // ─── Sync DOM + reload audio/background for the auto-loaded session (if any) ─
 // Runs last, after every control-wiring call above and after all module-level

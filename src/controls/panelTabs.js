@@ -7,9 +7,17 @@ export function initPanelTabs(root) {
   const tabBtns   = root.querySelectorAll('.tab-btn')
   const tabPanels = root.querySelectorAll('.tab-panel')
 
+  root.querySelector('.tab-bar')?.setAttribute('role', 'tablist')
+
   tabBtns.forEach(btn => {
+    btn.setAttribute('role', 'tab')
+    btn.setAttribute('aria-selected', btn.classList.contains('active') ? 'true' : 'false')
     btn.addEventListener('click', () => {
-      tabBtns.forEach(b => b.classList.toggle('active', b === btn))
+      tabBtns.forEach(b => {
+        const on = b === btn
+        b.classList.toggle('active', on)
+        b.setAttribute('aria-selected', on ? 'true' : 'false')
+      })
       tabPanels.forEach(panel => {
         panel.classList.toggle('hidden', panel.dataset.tabGroup !== btn.dataset.tab)
       })

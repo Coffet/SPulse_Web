@@ -11,7 +11,8 @@ function _refreshCanvasIfIdle() {
 }
 
 function _toFileURL(filePath) {
-  if (filePath.startsWith('file://')) return filePath
+  if (!filePath) return filePath
+  if (/^(blob:|file:|https?:)/i.test(filePath)) return filePath
   const normalized = filePath.replace(/\\/g, '/')
   return normalized.startsWith('/') ? `file://${normalized}` : `file:///${normalized}`
 }
@@ -151,7 +152,7 @@ class BackgroundRenderer {
       })
       if (!filePath) return
 
-      if (imgName) imgName.textContent = filePath.split(/[\\/]/).pop()
+      if (imgName) imgName.textContent = window.api.assetName?.(filePath) || filePath.split(/[\\/]/).pop()
 
       const img = new Image()
       img.src = _toFileURL(filePath)
@@ -177,7 +178,7 @@ class BackgroundRenderer {
 
       this._videoBg.load(filePath)
       bgState.videoPath = filePath
-      if (vidName) vidName.textContent = filePath.split(/[\\/]/).pop()
+      if (vidName) vidName.textContent = window.api.assetName?.(filePath) || filePath.split(/[\\/]/).pop()
 
       const vidEl = this._videoBg.el
       if (vidEl) _captureVideoThumb(vidEl, 'bg-video-thumb')

@@ -5,11 +5,11 @@
 [![Downloads](https://img.shields.io/github/downloads/senriki/SPulse/total?style=flat-square&logo=github)](https://github.com/senriki/SPulse/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/senriki/SPulse/ci.yml?branch=main&label=CI&style=flat-square&logo=githubactions)](https://github.com/senriki/SPulse/actions/workflows/ci.yml)
 
-Desktop app for creating MP4 waveform visualizer videos from audio files. Runs fully offline.
+Desktop app for creating MP4 waveform visualizer videos from audio files. A web companion (same UI) can preview, export WebM, and download a portable `.spulse` project for the desktop app. The desktop app runs fully offline.
 
 ![SPulse preview](docs/assets/img/preview.png)
 
-Built with Electron, Web Audio API, Canvas 2D, and FFmpeg.
+Built with Electron, Web Audio API, Canvas 2D, and FFmpeg. The web host is a small Node/Express static server — no accounts or database.
 
 ---
 
@@ -38,7 +38,8 @@ Links always point to the latest stable release. Looking for a portable Windows 
 
 ```bash
 npm install
-npm start
+npm start          # Electron desktop
+npm run start:web  # browser at http://localhost:3000
 ```
 
 On Linux/macOS/WSL, `make run` works the same way if you have Make installed.
@@ -47,7 +48,8 @@ On Linux/macOS/WSL, `make run` works the same way if you have Make installed.
 
 | npm script | `make` equivalent (Unix only) | Description |
 |---|---|---|
-| `npm start` | `make run` | Start the app in development mode |
+| `npm start` | `make run` | Start the Electron app in development mode |
+| `npm run start:web` | `make run-web` | Serve the web companion at http://localhost:3000 |
 | `npm install` | `make install` | Install dependencies |
 | `npm run build` | `make build` | Package for the current platform |
 | `npm run build:win` | `make build-win` | Build Windows installer (.exe via NSIS) |
@@ -70,8 +72,9 @@ Output is written to `dist/`.
 - **Drag to reposition**: click and drag the visualizer directly on the canvas to adjust its vertical position — syncs with the Y Offset slider in the panel
 - **Backgrounds**: solid color, linear gradient, static image (with blur/darken), looping video — thumbnail preview appears in the panel immediately after selecting a file
 - **Text overlay**: title + artist, 5 positions, custom XY, font/size/color/opacity
-- **Export**: MP4 via FFmpeg — Full HD, 4K, Shorts/Reels (9:16), Square (1:1), or custom resolution; 24/30/60 fps; H.264 or H.265; hardware-accelerated encoding via NVIDIA NVENC, AMD AMF, or Intel QSV (auto-detected, with manual override)
-- **Project save/load**: `.spx` JSON format preserves all settings and the audio file path
+- **Export**: Desktop — MP4 via FFmpeg (Full HD, 4K, Shorts/Reels, Square, custom; 24/30/60 fps; H.264/H.265; NVENC/AMF/QSV). Web — WebM via MediaRecorder, capped at 1080p / 30fps, recorded in real time
+- **Web companion**: `npm run start:web` — same editor in the browser, no accounts. Refresh discards the session unless you download a `.spulse` project (open that file in the desktop app for MP4)
+- **Project save/load**: `.spx` on this device (desktop); portable `.spulse` with embedded audio for sharing or web ↔ desktop
 - **Undo/redo**: 20-step history for visualizer style changes (Ctrl+Z / Ctrl+Y)
 - **Auto-update**: checks GitHub Releases on startup and downloads updates in the background; a banner appears when a new version is ready to install
 

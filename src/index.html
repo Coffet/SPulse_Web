@@ -3,14 +3,64 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="app-version" content="1.4.0">
+  <meta name="description" content="SPulse — design waveform visualizer videos in the browser, export WebM or a portable project for the desktop app.">
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file:; media-src 'self' blob: file:">
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file:; media-src 'self' blob: file:; connect-src 'self' blob:">
   <title>SPulse</title>
-  <link rel="icon" href="data:,">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles/main.css">
   <link rel="stylesheet" href="styles/controls.css">
+  <link rel="stylesheet" href="styles/home.css">
 </head>
 <body>
+  <a class="skip-link" id="skip-link" href="#home-new">Skip to start</a>
+
+  <section id="home-screen" class="home-screen">
+    <div class="home-shell">
+      <header class="home-header">
+        <div class="home-lockup">
+          <img class="home-mark" src="icon.svg" width="48" height="48" alt="">
+          <h1 class="home-title">SPulse</h1>
+        </div>
+        <p class="home-tagline">Waveform videos from any track</p>
+      </header>
+
+      <div class="home-actions" role="group" aria-label="Start a project">
+        <button type="button" class="home-card" id="home-new">
+          <span class="home-card-glyph" aria-hidden="true">
+            <svg viewBox="0 0 64 64" fill="none">
+              <rect x="8" y="8" width="48" height="48" rx="12" stroke="currentColor" stroke-width="6"/>
+              <path d="M32 20v24M20 32h24" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span class="home-card-text">
+            <span class="home-card-kicker">Create</span>
+            <span class="home-card-title">New project</span>
+            <span class="home-card-desc">Start your project from scratch</span>
+          </span>
+        </button>
+
+        <button type="button" class="home-card" id="home-import">
+          <span class="home-card-glyph" aria-hidden="true">
+            <svg viewBox="0 0 64 64" fill="none">
+              <path d="M6 18.5A5.5 5.5 0 0 1 11.5 13h13.2l5.3 5.5H52.5A5.5 5.5 0 0 1 58 24v24.5A5.5 5.5 0 0 1 52.5 54h-41A5.5 5.5 0 0 1 6 48.5z" stroke="currentColor" stroke-width="5.5" stroke-linejoin="round"/>
+              <path d="M8.5 32h47" stroke="currentColor" stroke-width="5.5" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span class="home-card-text">
+            <span class="home-card-kicker">Open</span>
+            <span class="home-card-title">Import project</span>
+            <span class="home-card-desc">Open a .spulse or .spx file</span>
+          </span>
+        </button>
+      </div>
+
+      <p class="home-foot">Runs in your browser — no account required</p>
+    </div>
+  </section>
+
+  <div id="studio" class="studio" hidden>
   <!-- Custom in-app menu bar — Windows/Linux only (macOS keeps its native
        top-of-screen menu). Hidden by default; menuBar.js reveals it after
        checking window.api.platform. Full-width, top of the window — same
@@ -31,13 +81,13 @@
           <button class="menu-action" data-action="open-audio">Open Audio…</button>
           <button class="menu-action" data-action="save-project">Save Project</button>
           <button class="menu-action" data-action="load-project">Load Project…</button>
-          <div class="menu-separator" id="menu-recent-separator" hidden></div>
-          <div class="menu-recent-projects" id="menu-recent-projects"></div>
+          <div class="menu-separator desktop-only" id="menu-recent-separator" hidden></div>
+          <div class="menu-recent-projects desktop-only" id="menu-recent-projects"></div>
           <div class="menu-separator"></div>
           <button class="menu-action" data-action="export-project">Export Project…</button>
           <button class="menu-action" data-action="import-project">Import Project…</button>
-          <div class="menu-separator"></div>
-          <button class="menu-action" data-action="quit">Quit</button>
+          <div class="menu-separator desktop-only"></div>
+          <button class="menu-action desktop-only" data-action="quit">Quit</button>
         </div>
       </div>
       <div class="menu-item" data-menu="edit">
@@ -51,10 +101,14 @@
         <button class="menu-trigger" type="button">Help</button>
         <div class="menu-dropdown" role="menu">
           <button class="menu-action" data-action="about">About SPulse</button>
-          <button class="menu-action" data-action="check-updates">Check for Updates…</button>
+          <button class="menu-action desktop-only" data-action="check-updates">Check for Updates…</button>
         </div>
       </div>
     </nav>
+  </div>
+
+  <div id="web-session-bar" class="web-session-bar hidden" role="status">
+    This tab is temporary. Refresh or close it and unsaved work is gone — download a project to keep it, or open that file in the desktop app for MP4.
   </div>
 
   <div id="update-bar" class="update-bar hidden">
@@ -87,10 +141,10 @@
 
       <div class="panel-body">
 
-        <div class="tab-bar">
-          <button class="tab-btn active" data-tab="waveform">Waveform</button>
-          <button class="tab-btn" data-tab="motion">Motion</button>
-          <button class="tab-btn" data-tab="background">Background</button>
+        <div class="tab-bar" role="tablist" aria-label="Visualizer controls">
+          <button class="tab-btn active" data-tab="waveform" type="button" aria-selected="true">Waveform</button>
+          <button class="tab-btn" data-tab="motion" type="button" aria-selected="false">Motion</button>
+          <button class="tab-btn" data-tab="background" type="button" aria-selected="false">Background</button>
         </div>
 
         <div class="tab-panel" data-tab-group="waveform">
@@ -371,10 +425,10 @@
          CENTER PANEL — Canvas + Transport
          ═══════════════════════════════════════ -->
     <main class="center-panel" id="center-panel">
-      <button class="panel-toggle panel-toggle-left" id="toggle-left-panel" title="Collapse panel">
+      <button class="panel-toggle panel-toggle-left" id="toggle-left-panel" type="button" title="Collapse panel" aria-label="Toggle visualizer panel">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>
       </button>
-      <button class="panel-toggle panel-toggle-right" id="toggle-right-panel" title="Collapse panel">
+      <button class="panel-toggle panel-toggle-right" id="toggle-right-panel" type="button" title="Collapse panel" aria-label="Toggle export panel">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>
       </button>
       <div class="canvas-area" id="canvas-area">
@@ -428,9 +482,9 @@
     <aside class="panel right-panel" id="right-panel">
       <div class="panel-body">
 
-        <div class="tab-bar">
-          <button class="tab-btn active" data-tab="audio">Audio</button>
-          <button class="tab-btn" data-tab="export">Export</button>
+        <div class="tab-bar" role="tablist" aria-label="Audio and export">
+          <button class="tab-btn active" data-tab="audio" type="button" aria-selected="true">Audio</button>
+          <button class="tab-btn" data-tab="export" type="button" aria-selected="false">Export</button>
         </div>
 
         <div class="tab-panel" data-tab-group="audio">
@@ -559,14 +613,14 @@
               <option value="60">60 fps</option>
             </select>
           </div>
-          <div class="control-group">
+          <div class="control-group desktop-only">
             <label class="control-label">Codec</label>
             <select id="export-codec" class="select-input">
               <option value="h264" selected>H.264 (compatible)</option>
               <option value="h265">H.265 (smaller, slower)</option>
             </select>
           </div>
-          <div class="control-group">
+          <div class="control-group desktop-only">
             <label class="control-label">Encoder <span class="encoder-badge" id="encoder-badge">…</span></label>
             <select id="export-encoder" class="select-input">
               <option value="auto" selected>Auto-detect</option>
@@ -576,7 +630,7 @@
               <option value="cpu">Software (CPU)</option>
             </select>
           </div>
-          <div class="control-group">
+          <div class="control-group desktop-only">
             <label class="control-label">Bitrate</label>
             <div class="radio-row">
               <label class="radio-label"><input type="radio" name="bitrate-mode" value="auto" checked> Auto</label>
@@ -587,14 +641,14 @@
               <span class="unit-label">kbps</span>
             </div>
           </div>
-          <div class="control-group">
+          <div class="control-group desktop-only">
             <label class="control-label">Audio</label>
             <select id="audio-mode" class="select-input">
               <option value="passthrough" selected>Passthrough (recommended)</option>
               <option value="aac320">Re-encode AAC 320kbps</option>
             </select>
           </div>
-          <div class="control-group">
+          <div class="control-group desktop-only">
             <label class="control-label">Output file</label>
             <div class="output-row">
               <input type="text" id="output-filename" class="text-input text-input-sm" placeholder="audio-spulse.mp4">
@@ -614,12 +668,12 @@
             <button class="btn btn-secondary btn-sm" id="btn-save-project" style="flex:1">Save…</button>
             <button class="btn btn-secondary btn-sm" id="btn-load-project" style="flex:1">Load…</button>
           </div>
-          <p class="action-caption">This device — .spx file</p>
+          <p class="action-caption desktop-only">This device — .spx file</p>
           <div class="output-row mt-6">
             <button class="btn btn-secondary btn-sm" id="btn-export-project" style="flex:1">Export…</button>
             <button class="btn btn-secondary btn-sm" id="btn-import-project" style="flex:1">Import…</button>
           </div>
-          <p class="action-caption">Portable — .spulse file, share to another device</p>
+          <p class="action-caption">Portable — .spulse file, share to another device or the desktop app</p>
           <p class="export-hint mt-6" id="project-hint">Ctrl+S to save</p>
           <button class="btn btn-destructive btn-sm w-full mt-6" id="btn-reset-defaults">Reset to Default</button>
         </section>
@@ -629,8 +683,8 @@
         <!-- Export Action -->
         <div class="export-action">
           <button class="btn btn-export" id="btn-export" disabled>
-            <svg viewBox="0 0 20 20" fill="currentColor" class="icon-sm"><path d="M10 2v10M5 7l5 5 5-5M3 15h14v2H3z"/></svg>
-            Export MP4
+            <svg viewBox="0 0 20 20" fill="currentColor" class="icon-sm" aria-hidden="true"><path d="M10 2v10M5 7l5 5 5-5M3 15h14v2H3z"/></svg>
+            <span id="btn-export-label">Export MP4</span>
           </button>
           <p class="export-hint" id="export-hint">Load an audio file to export</p>
         </div>
@@ -639,6 +693,7 @@
     </aside>
 
   </div>
+  </div><!-- /studio -->
 
   <!-- Export Progress Modal -->
   <div id="export-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
@@ -672,10 +727,11 @@
     <div class="modal about-modal">
       <h2 class="modal-title">SPulse</h2>
       <p class="about-tagline"><span id="about-version">Version …</span> — Audio waveform visualizer</p>
-      <p class="about-tagline">Export MP4 videos from any audio file. Fully offline.</p>
+      <p class="about-tagline desktop-only" id="about-desktop-note">Export MP4 videos from any audio file. Fully offline.</p>
+      <p class="about-tagline hidden" id="about-web-note">Design in the browser, export WebM, or download a .spulse project for the desktop app.</p>
       <div class="about-section">
         <h3 class="section-label">Open Source Components</h3>
-        <p class="about-license">
+        <p class="about-license desktop-only">
           <strong>FFmpeg</strong> — GNU Lesser General Public License v2.1+<br>
           This app uses FFmpeg libraries. FFmpeg source code is available at
           <span class="about-url">ffmpeg.org</span>. No FFmpeg source was modified.
@@ -684,7 +740,7 @@
           <strong>Inter</strong> — SIL Open Font License 1.1<br>
           <strong>JetBrains Mono</strong> — Apache License 2.0
         </p>
-        <p class="about-license">
+        <p class="about-license desktop-only">
           <strong>ffmpeg-static</strong> — MIT &nbsp;·&nbsp;
           <strong>fluent-ffmpeg</strong> — MIT &nbsp;·&nbsp;
           <strong>Electron</strong> — MIT

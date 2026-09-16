@@ -8,6 +8,7 @@ export const progressModal = {
   _startTs:    0,
   _onCancel:   null,
   _outputPath: null,
+  _realtime:   false,
 
   init(onCancel) {
     this._overlay  = document.getElementById('export-modal')
@@ -28,11 +29,12 @@ export const progressModal = {
     }
   },
 
-  show(totalFrames) {
+  show(totalFrames, opts = {}) {
     this._startTs    = performance.now()
     this._outputPath = null
+    this._realtime   = !!opts.realtime
 
-    if (this._title) this._title.textContent = 'Exporting MP4…'
+    if (this._title) this._title.textContent = opts.title || 'Exporting MP4…'
     document.getElementById('btn-export-cancel')?.classList.remove('hidden')
     document.getElementById('btn-export-close')?.classList.add('hidden')
     document.getElementById('btn-open-folder')?.classList.add('hidden')
@@ -44,13 +46,19 @@ export const progressModal = {
   update(framesDone, totalFrames) {
     const pct = totalFrames > 0 ? Math.round((framesDone / totalFrames) * 100) : 0
     if (this._fill)  this._fill.style.width = `${pct}%`
-    if (this._stats) this._stats.textContent = `Frame ${framesDone} / ${totalFrames} — ${pct}%`
+    if (this._stats) {
+      this._stats.textContent = this._realtime
+        ? `Recording ${pct}% — this matches the length of the song`
+        : `Frame ${framesDone} / ${totalFrames} — ${pct}%`
+    }
 
     if (framesDone > 2 && this._eta) {
       const elapsed = (performance.now() - this._startTs) / 1000
       const rate    = framesDone / elapsed
       const rem     = (totalFrames - framesDone) / Math.max(rate, 0.1)
-      this._eta.textContent = `~${Math.ceil(rem)}s remaining  (${rate.toFixed(1)} fps)`
+      this._eta.textContent = this._realtime
+        ? `~${Math.ceil(rem)}s remaining`
+        : `~${Math.ceil(rem)}s remaining  (${rate.toFixed(1)} fps)`
     }
   },
 
@@ -71,10 +79,11 @@ export const progressModal = {
     this._outputPath = outputPath
     if (this._title) this._title.textContent = 'Export Complete'
     if (this._fill)  this._fill.style.width  = '100%'
-    this.setMessage(`✓ Saved: ${outputPath.replace(/.*[\\/]/, '')}`)
+    this.setMessage(`✓ Saved: ${String(outputPath || '').replace(/.*[\\/]/, '')}`)
     document.getElementById('btn-export-cancel')?.classList.add('hidden')
     document.getElementById('btn-export-close')?.classList.remove('hidden')
-    document.getElementById('btn-open-folder')?.classList.remove('hidden')
+    const canReveal = window.api?.platform !== 'web'
+    document.getElementById('btn-open-folder')?.classList.toggle('hidden', !canReveal)
   },
 
   hide() {
