@@ -110,6 +110,7 @@ body.studio-active {
 
 /* ─── App Layout (stage + inspector) ─────────────────────────────────────── */
 .app-layout {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--panel-inspector-width);
   grid-template-rows: 1fr;
@@ -128,7 +129,10 @@ body.studio-active {
   transition: opacity var(--transition-med);
 }
 
-.panel.collapsed { opacity: 0; }
+.panel.collapsed {
+  opacity: 0;
+  pointer-events: none;
+}
 
 .panel-header {
   display: flex;
@@ -568,9 +572,9 @@ body.studio-active {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 5;
-  width: 16px;
-  height: 44px;
+  z-index: 10;
+  width: 18px;
+  height: 48px;
   padding: 0;
   display: flex;
   align-items: center;
@@ -591,7 +595,15 @@ body.studio-active {
 
 .panel-toggle svg { width: 12px; height: 12px; flex-shrink: 0; transition: transform var(--transition-fast); }
 
-.panel-toggle-right { right: 0; border-right: none; border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.panel-toggle-right {
+  right: var(--panel-inspector-width);
+  border-right: none;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.panel-toggle-right.collapsed {
+  right: 0;
+}
 
 .panel-toggle.collapsed svg { transform: rotate(180deg); }
 
@@ -806,6 +818,10 @@ body.studio-active {
 /* ─── Right Panel (inspector) ────────────────────────────────────────────── */
 .right-panel {
   min-width: 0;
+}
+
+.inspector.collapsed {
+  border-left-width: 0;
 }
 
 /* Audio metadata block */
@@ -1254,10 +1270,14 @@ input, textarea, select, [contenteditable] {
   body[data-platform="web"] .inspector.collapsed {
     opacity: 0;
     pointer-events: none;
+    visibility: hidden;
   }
-  body[data-platform="web"] .panel-toggle {
-    width: 22px;
-    height: 48px;
+  body[data-platform="web"] .panel-toggle-right {
+    z-index: 11;
+    right: min(320px, 88vw);
+  }
+  body[data-platform="web"] .panel-toggle-right.collapsed {
+    right: 0;
   }
   body[data-platform="web"] .studio-export .export-hint {
     display: none;

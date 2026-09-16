@@ -538,13 +538,26 @@ document.getElementById('app-menu-bar')?.addEventListener('transitionend', e => 
   if (e.propertyName === 'height') canvasEngine.refitPreview()
 })
 
-toggleRightPanel?.addEventListener('click', () => {
-  _rightPanelCollapsed = !_rightPanelCollapsed
+function _setInspectorCollapsed(collapsed) {
+  _rightPanelCollapsed = collapsed
   _applyPanelWidths()
-  rightPanelEl?.classList.toggle('collapsed', _rightPanelCollapsed)
-  toggleRightPanel.classList.toggle('collapsed', _rightPanelCollapsed)
-  toggleRightPanel.title = _rightPanelCollapsed ? 'Expand panel' : 'Collapse panel'
-})
+  rightPanelEl?.classList.toggle('collapsed', collapsed)
+  rightPanelEl?.setAttribute('aria-hidden', collapsed ? 'true' : 'false')
+  toggleRightPanel?.classList.toggle('collapsed', collapsed)
+  const label = collapsed ? 'Expand inspector' : 'Collapse inspector'
+  if (toggleRightPanel) {
+    toggleRightPanel.title = label
+    toggleRightPanel.setAttribute('aria-expanded', String(!collapsed))
+    toggleRightPanel.setAttribute('aria-label', label)
+  }
+  requestAnimationFrame(() => canvasEngine.refitPreview())
+}
+
+function _toggleInspector() {
+  _setInspectorCollapsed(!_rightPanelCollapsed)
+}
+
+toggleRightPanel?.addEventListener('click', _toggleInspector)
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function _isAudioFile(name) {
