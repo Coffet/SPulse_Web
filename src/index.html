@@ -730,31 +730,78 @@
     </div>
   </div>
 
-  <!-- About Modal -->
-  <div id="about-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <!-- About -->
+  <div id="about-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="about-title">
     <div class="modal about-modal">
-      <h2 class="modal-title">SPulse</h2>
-      <p class="about-tagline"><span id="about-version">Version …</span> — Audio waveform visualizer</p>
-      <p class="about-tagline desktop-only" id="about-desktop-note">Export MP4 videos from any audio file. Fully offline.</p>
-      <p class="about-tagline hidden" id="about-web-note">Design in the browser, export WebM, or download a .spulse project for the desktop app.</p>
-      <div class="about-section">
-        <h3 class="section-label">Open Source Components</h3>
-        <p class="about-license desktop-only">
-          <strong>FFmpeg</strong> — GNU Lesser General Public License v2.1+<br>
-          This app uses FFmpeg libraries. FFmpeg source code is available at
-          <span class="about-url">ffmpeg.org</span>. No FFmpeg source was modified.
-        </p>
-        <p class="about-license">
-          <strong>Inter</strong> — SIL Open Font License 1.1<br>
-          <strong>JetBrains Mono</strong> — Apache License 2.0
-        </p>
-        <p class="about-license desktop-only">
-          <strong>ffmpeg-static</strong> — MIT &nbsp;·&nbsp;
-          <strong>fluent-ffmpeg</strong> — MIT &nbsp;·&nbsp;
-          <strong>Electron</strong> — MIT
+      <button type="button" class="about-dismiss" id="about-modal-close" data-about-close title="Close" aria-label="Close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 4l8 8M12 4l-8 8"/>
+        </svg>
+      </button>
+
+      <div class="about-brand">
+        <svg class="about-mark" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <rect x="1" y="10" width="2" height="6" rx="1" fill="currentColor"/>
+          <rect x="4" y="6"  width="2" height="10" rx="1" fill="currentColor"/>
+          <rect x="7" y="3"  width="2" height="13" rx="1" fill="currentColor"/>
+          <rect x="10" y="7" width="2" height="9"  rx="1" fill="currentColor"/>
+          <rect x="13" y="4" width="2" height="12" rx="1" fill="currentColor"/>
+          <rect x="16" y="8" width="2" height="8" rx="1" fill="currentColor"/>
+        </svg>
+        <h2 class="about-title" id="about-title">SPulse</h2>
+        <p class="about-lead">Waveform videos from any track</p>
+        <p class="about-meta">
+          <span class="about-edition hidden" id="about-edition">Web</span>
+          <span class="about-version" id="about-version">Version …</span>
         </p>
       </div>
-      <button class="btn btn-secondary" id="about-modal-close">Close</button>
+
+      <p class="about-note desktop-only" id="about-desktop-note">Export MP4 from any audio file. Fully offline — no account, no cloud.</p>
+      <p class="about-note hidden" id="about-web-note">This browser edition designs and exports WebM here, or downloads a .spulse project for the desktop app.</p>
+
+      <dl class="about-credits">
+        <div>
+          <dt>Web version</dt>
+          <dd>Coffet</dd>
+        </div>
+        <div>
+          <dt>Original</dt>
+          <dd>Senriki</dd>
+        </div>
+      </dl>
+
+      <div class="about-section">
+        <h3 class="about-section-label">Open source</h3>
+        <ul class="about-licenses">
+          <li class="desktop-only">
+            <span class="about-lic-name">FFmpeg</span>
+            <span class="about-lic-id">LGPL v2.1+</span>
+          </li>
+          <li>
+            <span class="about-lic-name">Inter</span>
+            <span class="about-lic-id">SIL OFL 1.1</span>
+          </li>
+          <li>
+            <span class="about-lic-name">JetBrains Mono</span>
+            <span class="about-lic-id">Apache 2.0</span>
+          </li>
+          <li class="desktop-only">
+            <span class="about-lic-name">ffmpeg-static</span>
+            <span class="about-lic-id">MIT</span>
+          </li>
+          <li class="desktop-only">
+            <span class="about-lic-name">fluent-ffmpeg</span>
+            <span class="about-lic-id">MIT</span>
+          </li>
+          <li class="desktop-only">
+            <span class="about-lic-name">Electron</span>
+            <span class="about-lic-id">MIT</span>
+          </li>
+        </ul>
+        <p class="about-ffmpeg-note desktop-only">
+          This app uses FFmpeg libraries. Source is at <span class="about-url">ffmpeg.org</span>. No FFmpeg source was modified.
+        </p>
+      </div>
     </div>
   </div>
 

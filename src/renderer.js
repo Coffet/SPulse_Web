@@ -1058,6 +1058,7 @@ function applyWebChrome() {
   const hint = document.getElementById('project-hint')
   if (hint) hint.textContent = _defaultProjectHint()
   document.getElementById('about-web-note')?.classList.remove('hidden')
+  document.getElementById('about-edition')?.classList.remove('hidden')
   applyWebExportLimitsToDom()
   enterHome()
 }

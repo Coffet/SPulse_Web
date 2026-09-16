@@ -1,20 +1,24 @@
-// About screen modal — opened via Help > About (native menu on macOS via IPC,
-// or the in-app menu bar on Windows/Linux via a direct call to showAbout()).
+// About — Help > About (native menu on macOS via IPC, in-app menu elsewhere).
 export function showAbout() {
-  document.getElementById('about-modal')?.classList.remove('hidden')
+  const modal = document.getElementById('about-modal')
+  if (!modal) return
+  modal.classList.remove('hidden')
+  document.getElementById('about-modal-close')?.focus()
 }
 
 export function initAboutScreen() {
   const modal = document.getElementById('about-modal')
   if (!modal) return
 
-  document.getElementById('about-modal-close')?.addEventListener('click', () => modal.classList.add('hidden'))
-  modal.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden') })
+  const close = () => modal.classList.add('hidden')
+  modal.querySelectorAll('[data-about-close]').forEach(btn => {
+    btn.addEventListener('click', close)
+  })
+  modal.addEventListener('click', e => { if (e.target === modal) close() })
 
-  // Populate version from package.json via app.getVersion() (main process)
   window.api.getAppVersion?.().then(v => {
     const el = document.getElementById('about-version')
-    if (el) el.textContent = `Version ${v}`
+    if (el && v) el.textContent = `v${v}`
   })
 
   window.api.onShowAbout?.(showAbout)
