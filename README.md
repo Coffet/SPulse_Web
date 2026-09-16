@@ -12,13 +12,17 @@ Desktop app by [Senriki](https://github.com/senriki). Web version and UI rebuild
 - **Web** — Node/Express serves the static UI. Design, export **WebM** (MediaRecorder, up to 1080p / 30fps, real time), and download a portable `.spulse` project. Refreshing the tab discards the session unless you saved that file.
 - **Desktop** — Electron + bundled FFmpeg. Offline **MP4** export (up to 4K / 60fps, GPU encoders), last-session restore, recent files, and auto-update.
 
-SPulse preview
+The web **landing** stays the original dark cyan start screen. The **studio** is a Figma-style editor: top bar, large canvas, style chips under the preview, and one right inspector (Look / Scene / Export). Light and dark themes apply to the studio only.
+
+![SPulse landing](docs/preview-landing.png)
+
+![SPulse studio, dark theme](docs/preview-studio.png)
+
+![SPulse studio, light theme](docs/preview-studio-light.png)
 
 Built with vanilla JS, Web Audio API, Canvas 2D, Express (web host), and Electron + FFmpeg (desktop).
 
 ---
-
-
 
 ## Use in the browser
 
@@ -37,10 +41,7 @@ To keep work, use **Export Project** / Ctrl+S for a `.spulse` file. Open that fi
 
 ---
 
-
-
 ## Download (desktop)
-
 
 | Platform                                 | Link                                                                                                          |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -56,8 +57,6 @@ Links always point to the latest stable release. Looking for a portable Windows 
 
 ---
 
-
-
 ## Requirements
 
 **Web**
@@ -71,8 +70,6 @@ Links always point to the latest stable release. Looking for a portable Windows 
 - Same Node/npm for building from source
 - A display (Windows or macOS host; WSL2 headless is not supported)
 
-
-
 ## Getting Started
 
 ```bash
@@ -84,7 +81,6 @@ npm start          # Electron desktop
 On Linux/macOS/WSL, `make run-web` / `make run` work the same way if you have Make installed.
 
 ## Commands
-
 
 | npm script                   | `make` equivalent (Unix only) | Description                                                             |
 | ---------------------------- | ----------------------------- | ----------------------------------------------------------------------- |
@@ -106,15 +102,15 @@ Output is written to `dist/`.
 
 ---
 
-
-
 ## Features
 
-- **Import**: MP3, WAV, FLAC, AAC, OGG, M4A — drag-and-drop or Ctrl+O
+- **Studio**: top bar (audio, undo/redo, theme, export), large canvas, style chips, one inspector — Look (waveform), Scene (background + overlay), Export
+- **Light / dark**: studio theme toggle, remembered in the browser. Landing always stays dark cyan
+- **Import**: MP3, WAV, FLAC, AAC, OGG, M4A — drag-and-drop, **Open audio** in the top bar, or Ctrl+O. Loading a new file replaces the current track (playback included)
 - **6 visualizer styles**: Classic Bar, Mirror Bar, Smooth Line, Filled Wave, Radial Pulse, Spectrum Glow
-- **Drag to reposition**: click and drag the visualizer directly on the canvas to adjust its vertical position — syncs with the Y Offset slider in the panel
-- **Backgrounds**: solid color, linear gradient, static image (with blur/darken), looping video — thumbnail preview appears in the panel immediately after selecting a file
-- **Text overlay**: title + artist, 5 positions, custom XY, font/size/color/opacity
+- **Drag to reposition**: click and drag the visualizer on the canvas — syncs with Y Offset in Look
+- **Backgrounds**: solid color, linear gradient, static image (with blur/darken), looping video — thumbnail preview in Scene after you pick a file
+- **Text overlay**: title + artist, 5 positions, custom XY, font/size/color/opacity (Scene)
 - **Export (web)**: WebM via MediaRecorder, capped at 1080p / 30fps, recorded in real time in the browser
 - **Export (desktop)**: MP4 via FFmpeg (Full HD, 4K, Shorts/Reels, Square, custom; 24/30/60 fps; H.264/H.265; NVENC/AMF/QSV)
 - **Landing (web)**: first screen offers New project or Import project; desktop skips this and opens the studio
@@ -122,30 +118,25 @@ Output is written to `dist/`.
 - **Undo/redo**: 20-step history for visualizer style changes (Ctrl+Z / Ctrl+Y)
 - **Desktop extras**: last-session restore, recent files, auto-update from GitHub Releases
 
-
-
 ## Keyboard Shortcuts
 
-
-| Shortcut | Action                                     |
-| -------- | ------------------------------------------ |
-| `Ctrl+O` | Open audio file                            |
-| `Space`  | Play / Pause                               |
-| `Ctrl+E` | Start export                               |
-| `Ctrl+S` | Save / download project (`.spulse` on web) |
-| `Ctrl+Z` | Undo                                       |
-| `Ctrl+Y` | Redo                                       |
-| `Ctrl+Q` | Quit (desktop)                             |
-| `Escape` | Close modal                                |
-
+| Shortcut       | Action                                     |
+| -------------- | ------------------------------------------ |
+| `Ctrl+O`       | Open audio file                            |
+| `Ctrl+N`       | New session                                |
+| `Ctrl+Shift+R` | Reset settings (keep audio)                |
+| `Space`        | Play / Pause                               |
+| `Ctrl+E`       | Start export                               |
+| `Ctrl+S`       | Save / download project (`.spulse` on web) |
+| `Ctrl+Z`       | Undo                                       |
+| `Ctrl+Y`       | Redo                                       |
+| `F11`          | Toggle canvas fullscreen                   |
+| `Ctrl+Q`       | Quit (desktop)                             |
+| `Escape`       | Close modal                                |
 
 ---
 
-
-
 ## Known Issues & Tips
-
-
 
 ### Windows: SmartScreen warning on install
 
@@ -159,8 +150,6 @@ Windows Defender's **Ransomware protection → Controlled folder access** blocks
 
 1. Choose an output folder outside the protected list (e.g. a subfolder you created in `C:\Users\<you>\Videos`)
 2. Or whitelist SPulse: **Windows Security → Virus & threat protection → Ransomware protection → Allow an app through Controlled folder access → Add SPulse**
-
-
 
 ### Linux: AppImage crashes on launch (Ubuntu 23.10+/24.04)
 
@@ -190,8 +179,6 @@ or right-click the file → **Properties → Permissions → Allow executing fil
 
 ---
 
-
-
 ## Packaging
 
 Before running `npm run build` (or `make build`), place app icons in `build/`:
@@ -212,15 +199,11 @@ Stable builds are tagged `vX.Y.Z` and published as the "Latest Release" on GitHu
 
 ---
 
-
-
 ## Contributing
 
-Want to help? See `[CONTRIBUTING.md](./CONTRIBUTING.md)` for dev setup, code style, commit conventions, and how to submit a PR.
+Want to help? See [CONTRIBUTING.md](./CONTRIBUTING.md) for dev setup, code style, commit conventions, and how to submit a PR.
 
 ---
-
-
 
 ## License
 
@@ -229,8 +212,6 @@ MIT — see individual dependency licenses for FFmpeg (LGPL v2.1+), Inter (SIL O
 The app's Help > About screen lists all open-source component licenses as required by the FFmpeg LGPL.
 
 ---
-
-
 
 ## Credits
 
