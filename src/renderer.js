@@ -1016,7 +1016,11 @@ backgroundRenderer.initFilePickers(visualizerState.background)
 initOverlayControls(visualizerState.overlay)
 
 // ─── Wire export button ───────────────────────────────────────────────────────
-document.getElementById('btn-export')?.addEventListener('click', () => { _pauseForExport(); startExport() })
+document.getElementById('btn-export')?.addEventListener('click', () => {
+  if (!appState.loaded) return
+  _pauseForExport()
+  startExport()
+})
 
 function enterHome() {
   const home = document.getElementById('home-screen')

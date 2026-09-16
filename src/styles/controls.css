@@ -360,6 +360,9 @@
   background: var(--color-surface-active);
   border-color: var(--color-panel-border);
   color: var(--color-text-muted);
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .icon-sm { width: 16px; height: 16px; }

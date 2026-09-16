@@ -38,10 +38,10 @@ export function isExporting() {
 }
 
 export async function startExport() {
+  if (!window.appState?.loaded) return
   if (isWeb()) return startWebExport()
 
   const appState = window.appState
-  if (!appState?.loaded) return
   // Guard against re-entrant calls (double-click, Ctrl+E while exporting) —
   // a second export-video call would kill the in-flight FFmpeg process mid-stream.
   if (_exporting) return
