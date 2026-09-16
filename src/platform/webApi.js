@@ -90,6 +90,7 @@ async function _readProjectFile() {
 }
 
 function createWebApi() {
+  const bus = _makeBus()
   return {
     platform: 'web',
 
@@ -191,18 +192,81 @@ function createWebApi() {
     onMenuUndo: _noop,
     onMenuRedo: _noop,
     onMenuCheckUpdates: _noop,
-    onUpdateAvailable: _noop,
+    onUpdateAvailable: (cb) => bus.on('update-available', cb),
     onUpdateProgress: _noop,
     onUpdateDownloaded: _noop,
-    onUpdateNotAvailable: _noop,
-    getAppVersion: async () =>
-      document.querySelector('meta[name="app-version"]')?.content || 'web',
-    checkForUpdates: _asyncFalse,
+    onUpdateNotAvailable: (cb) => bus.on('update-not-available', cb),
+    getAppVersion: async () => {
+      try {
+        const r = await fetch('/api/version')
+        if (r.ok) {
+          const j = await r.json()
+          if (j.version) return j.version
+        }
+      } catch { /* fall through */ }
+      return document.querySelector('meta[name="app-version"]')?.content || 'web'
+    },
+    checkForUpdates: async () => {
+      try {
+        const [localRes, upRes] = await Promise.all([
+          fetch('/api/version'),
+          fetch('/api/upstream'),
+        ])
+        if (!localRes.ok || !upRes.ok) {
+          bus.emit('update-not-available', { error: !upRes.ok })
+          return
+        }
+        const local = await localRes.json()
+        const up = await upRes.json()
+        const remote = up?.version
+        const current = local?.version
+        if (remote && current && _cmpSemver(remote, current) > 0) {
+          bus.emit('update-available', { version: remote })
+        } else {
+          bus.emit('update-not-available')
+        }
+      } catch {
+        bus.emit('update-not-available', { error: true })
+      }
+    },
     installUpdate: _asyncFalse,
-    downloadUpdate: _asyncFalse,
+    downloadUpdate: async () => {
+      location.reload()
+    },
 
     downloadBlob: _downloadBlob,
     assetName: (filePath) => blobNames.get(filePath) || '',
+  }
+}
+
+function _cmpSemver(a, b) {
+  const parse = v => {
+    const m = String(v).trim().match(/^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/)
+    if (!m) return { n: [0, 0, 0], pre: String(v) }
+    return { n: [+m[1], +m[2], +m[3]], pre: m[4] || '' }
+  }
+  const A = parse(a)
+  const B = parse(b)
+  for (let i = 0; i < 3; i++) {
+    if (A.n[i] !== B.n[i]) return A.n[i] - B.n[i]
+  }
+  if (!A.pre && B.pre) return 1
+  if (A.pre && !B.pre) return -1
+  if (A.pre === B.pre) return 0
+  return A.pre < B.pre ? -1 : 1
+}
+
+function _makeBus() {
+  const map = new Map()
+  return {
+    on(name, cb) {
+      if (typeof cb !== 'function') return
+      if (!map.has(name)) map.set(name, [])
+      map.get(name).push(cb)
+    },
+    emit(name, data) {
+      for (const cb of map.get(name) || []) cb(data)
+    },
   }
 }
 

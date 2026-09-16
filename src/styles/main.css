@@ -932,6 +932,16 @@ html, body {
 
 .update-install-btn:hover { background: #00bde6; }
 
+.update-github-link {
+  flex-shrink: 0;
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.update-github-link:hover { text-decoration: underline; }
+
 .update-dismiss-btn {
   flex-shrink: 0;
   padding: 2px 6px;

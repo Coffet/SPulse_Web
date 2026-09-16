@@ -16,6 +16,17 @@
 <body>
   <a class="skip-link" id="skip-link" href="#home-new">Skip to start</a>
 
+  <div id="update-bar" class="update-bar hidden">
+    <span id="update-msg" class="update-msg"></span>
+    <div id="update-progress-wrap" class="update-progress-wrap hidden">
+      <div id="update-progress-fill" class="update-progress-fill"></div>
+    </div>
+    <button id="btn-update-now" class="update-install-btn hidden">Update Now</button>
+    <a id="btn-update-github" class="update-github-link hidden" href="https://github.com/senriki/SPulse" target="_blank" rel="noopener noreferrer">View on GitHub</a>
+    <button id="btn-update-install" class="update-install-btn hidden">Restart &amp; Install</button>
+    <button id="btn-update-dismiss" class="update-dismiss-btn" title="Dismiss">✕</button>
+  </div>
+
   <section id="home-screen" class="home-screen">
     <div class="home-shell">
       <header class="home-header">
@@ -101,7 +112,7 @@
         <button class="menu-trigger" type="button">Help</button>
         <div class="menu-dropdown" role="menu">
           <button class="menu-action" data-action="about">About SPulse</button>
-          <button class="menu-action desktop-only" data-action="check-updates">Check for Updates…</button>
+          <button class="menu-action" data-action="check-updates">Check for Updates…</button>
         </div>
       </div>
     </nav>
@@ -109,16 +120,6 @@
 
   <div id="web-session-bar" class="web-session-bar hidden" role="status">
     This tab is temporary. Refresh or close it and unsaved work is gone — download a project to keep it, or open that file in the desktop app for MP4.
-  </div>
-
-  <div id="update-bar" class="update-bar hidden">
-    <span id="update-msg" class="update-msg"></span>
-    <div id="update-progress-wrap" class="update-progress-wrap hidden">
-      <div id="update-progress-fill" class="update-progress-fill"></div>
-    </div>
-    <button id="btn-update-now" class="update-install-btn hidden">Update Now</button>
-    <button id="btn-update-install" class="update-install-btn hidden">Restart &amp; Install</button>
-    <button id="btn-update-dismiss" class="update-dismiss-btn" title="Dismiss">✕</button>
   </div>
 
   <div class="app-layout">

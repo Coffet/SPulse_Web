@@ -1194,11 +1194,11 @@ initErrorDialog()
 initAboutScreen()
 
 // ─── Detect GPU encoders on startup ──────────────────────────────────────────
+initUpdateBanner()
 if (!isWeb()) {
   window.api.detectGpuEncoders?.().then(info => {
     if (info) { _detectedGpu = info; _updateEncoderBadge() }
   })
-  initUpdateBanner()
 }
 
 // ─── Sync DOM + reload audio/background for the auto-loaded session (if any) ─

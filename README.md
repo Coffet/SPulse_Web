@@ -1,20 +1,24 @@
-# SPulse
+# SPulse: Web Version
 
-[![Latest Release](https://img.shields.io/github/v/release/senriki/SPulse?label=release&style=flat-square&logo=github)](https://github.com/senriki/SPulse/releases/latest)
-[![License](https://img.shields.io/github/license/senriki/SPulse?style=flat-square)](./LICENSE)
-[![Downloads](https://img.shields.io/github/downloads/senriki/SPulse/total?style=flat-square&logo=github)](https://github.com/senriki/SPulse/releases)
-[![CI](https://img.shields.io/github/actions/workflow/status/senriki/SPulse/ci.yml?branch=main&label=CI&style=flat-square&logo=githubactions)](https://github.com/senriki/SPulse/actions/workflows/ci.yml)
+[Latest Release](https://github.com/senriki/SPulse/releases/latest)
+[License](./LICENSE)
+[Downloads](https://github.com/senriki/SPulse/releases)
+[CI](https://github.com/senriki/SPulse/actions/workflows/ci.yml)
 
 SPulse is a waveform visualizer you can run in the **browser** or as a **desktop** app. Same editor, same styles — no accounts, no database.
+
+Desktop app by [Senriki](https://github.com/senriki). Web version and UI rebuild by [Coffet](https://github.com/Coffet).
 
 - **Web** — Node/Express serves the static UI. Design, export **WebM** (MediaRecorder, up to 1080p / 30fps, real time), and download a portable `.spulse` project. Refreshing the tab discards the session unless you saved that file.
 - **Desktop** — Electron + bundled FFmpeg. Offline **MP4** export (up to 4K / 60fps, GPU encoders), last-session restore, recent files, and auto-update.
 
-![SPulse preview](docs/assets/img/preview.png)
+SPulse preview
 
 Built with vanilla JS, Web Audio API, Canvas 2D, Express (web host), and Electron + FFmpeg (desktop).
 
 ---
+
+
 
 ## Use in the browser
 
@@ -23,28 +27,36 @@ npm install
 npm run start:web
 ```
 
-Open **http://localhost:3000**. Pick **New project** or **Import project** (`.spulse` / `.spx`), then load audio and design as usual.
+Open **[http://localhost:3000](http://localhost:3000)**. Pick **New project** or **Import project** (`.spulse` / `.spx`), then load audio and design as usual.
 
-The server only hosts files from `src/`. Encoding happens in the visitor’s browser. There is no upload API and no login.
+The server only hosts files from `src/` (plus `/api/version` and `/api/upstream` for the update check). Encoding happens in the visitor’s browser. There is no upload API and no login.
+
+When `senriki/SPulse` `main` is ahead of this host, a banner offers **Reload** (after you pull/redeploy) or **View on GitHub**. Help → Check for Updates… does the same check on demand.
 
 To keep work, use **Export Project** / Ctrl+S for a `.spulse` file. Open that file in the desktop app if you need MP4.
 
 ---
 
+
+
 ## Download (desktop)
 
-| Platform | Link |
-|---|---|
-| Windows 10/11 | [Download .exe](https://github.com/senriki/SPulse/releases/latest/download/SPulse-latest-win.exe) |
-| macOS (Apple Silicon, macOS 13 Ventura+) | [Download .dmg](https://github.com/senriki/SPulse/releases/latest/download/SPulse-latest-mac-arm64.dmg) |
-| macOS (Intel, macOS 13 Ventura+) | [Download .dmg](https://github.com/senriki/SPulse/releases/latest/download/SPulse-latest-mac-x64.dmg) |
-| Linux | [Download .AppImage](https://github.com/senriki/SPulse/releases/latest/download/SPulse-latest-linux.AppImage) |
+
+| Platform                                 | Link                                                                                                          |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Windows 10/11                            | [Download .exe](https://github.com/senriki/SPulse/releases/latest/download/SPulse-latest-win.exe)             |
+| macOS (Apple Silicon, macOS 13 Ventura+) | [Download .dmg](https://github.com/senriki/SPulse/releases/latest/download/SPulse-latest-mac-arm64.dmg)       |
+| macOS (Intel, macOS 13 Ventura+)         | [Download .dmg](https://github.com/senriki/SPulse/releases/latest/download/SPulse-latest-mac-x64.dmg)         |
+| Linux                                    | [Download .AppImage](https://github.com/senriki/SPulse/releases/latest/download/SPulse-latest-linux.AppImage) |
+
 
 Links always point to the latest stable release. Looking for a portable Windows build, older versions, or a release candidate? See [all releases](https://github.com/senriki/SPulse/releases).
 
 **macOS 12 or older?** Stay on [v1.3.0](https://github.com/senriki/SPulse/releases/tag/v1.3.0) — v1.4.0 raises the floor to macOS 13 Ventura and will not launch on older systems. The in-app auto-updater does not check OS compatibility before offering an update, so upgrading manually past v1.3.0 on macOS 12 or older is not recommended.
 
 ---
+
+
 
 ## Requirements
 
@@ -59,6 +71,8 @@ Links always point to the latest stable release. Looking for a portable Windows 
 - Same Node/npm for building from source
 - A display (Windows or macOS host; WSL2 headless is not supported)
 
+
+
 ## Getting Started
 
 ```bash
@@ -71,24 +85,28 @@ On Linux/macOS/WSL, `make run-web` / `make run` work the same way if you have Ma
 
 ## Commands
 
-| npm script | `make` equivalent (Unix only) | Description |
-|---|---|---|
-| `npm run start:web` | `make run-web` | Start the web app at http://localhost:3000 |
-| `npm start` | `make run` | Start the Electron desktop app |
-| `npm install` | `make install` | Install dependencies |
-| `npm run build` | `make build` | Package for the current platform |
-| `npm run build:win` | `make build-win` | Build Windows installer (.exe via NSIS) |
-| `npm run build:win:portable` | `make build-win-portable` | Build Windows portable .exe (no install needed, good for quick testing) |
-| `npm run build:mac` | `make build-mac` | Build macOS disk image (.dmg) |
-| `npm run build:linux` | `make build-linux` | Build Linux AppImage |
-| `npm run icon` | `make icon` | Regenerate app icons in `build/` |
-| `npm run clean` | `make clean` | Remove `dist/` and `out/` build artifacts |
+
+| npm script                   | `make` equivalent (Unix only) | Description                                                             |
+| ---------------------------- | ----------------------------- | ----------------------------------------------------------------------- |
+| `npm run start:web`          | `make run-web`                | Start the web app at [http://localhost:3000](http://localhost:3000)     |
+| `npm start`                  | `make run`                    | Start the Electron desktop app                                          |
+| `npm install`                | `make install`                | Install dependencies                                                    |
+| `npm run build`              | `make build`                  | Package for the current platform                                        |
+| `npm run build:win`          | `make build-win`              | Build Windows installer (.exe via NSIS)                                 |
+| `npm run build:win:portable` | `make build-win-portable`     | Build Windows portable .exe (no install needed, good for quick testing) |
+| `npm run build:mac`          | `make build-mac`              | Build macOS disk image (.dmg)                                           |
+| `npm run build:linux`        | `make build-linux`            | Build Linux AppImage                                                    |
+| `npm run icon`               | `make icon`                   | Regenerate app icons in `build/`                                        |
+| `npm run clean`              | `make clean`                  | Remove `dist/` and `out/` build artifacts                               |
+
 
 The `npm run ...` commands work on every platform, including Windows without Make installed. The `Makefile` is an optional convenience shortcut for Unix-like shells (Linux/macOS/WSL).
 
 Output is written to `dist/`.
 
 ---
+
+
 
 ## Features
 
@@ -104,22 +122,30 @@ Output is written to `dist/`.
 - **Undo/redo**: 20-step history for visualizer style changes (Ctrl+Z / Ctrl+Y)
 - **Desktop extras**: last-session restore, recent files, auto-update from GitHub Releases
 
+
+
 ## Keyboard Shortcuts
 
-| Shortcut | Action |
-|---|---|
-| `Ctrl+O` | Open audio file |
-| `Space` | Play / Pause |
-| `Ctrl+E` | Start export |
+
+| Shortcut | Action                                     |
+| -------- | ------------------------------------------ |
+| `Ctrl+O` | Open audio file                            |
+| `Space`  | Play / Pause                               |
+| `Ctrl+E` | Start export                               |
 | `Ctrl+S` | Save / download project (`.spulse` on web) |
-| `Ctrl+Z` | Undo |
-| `Ctrl+Y` | Redo |
-| `Ctrl+Q` | Quit (desktop) |
-| `Escape` | Close modal |
+| `Ctrl+Z` | Undo                                       |
+| `Ctrl+Y` | Redo                                       |
+| `Ctrl+Q` | Quit (desktop)                             |
+| `Escape` | Close modal                                |
+
 
 ---
 
+
+
 ## Known Issues & Tips
+
+
 
 ### Windows: SmartScreen warning on install
 
@@ -133,6 +159,8 @@ Windows Defender's **Ransomware protection → Controlled folder access** blocks
 
 1. Choose an output folder outside the protected list (e.g. a subfolder you created in `C:\Users\<you>\Videos`)
 2. Or whitelist SPulse: **Windows Security → Virus & threat protection → Ransomware protection → Allow an app through Controlled folder access → Add SPulse**
+
+
 
 ### Linux: AppImage crashes on launch (Ubuntu 23.10+/24.04)
 
@@ -162,6 +190,8 @@ or right-click the file → **Properties → Permissions → Allow executing fil
 
 ---
 
+
+
 ## Packaging
 
 Before running `npm run build` (or `make build`), place app icons in `build/`:
@@ -182,11 +212,15 @@ Stable builds are tagged `vX.Y.Z` and published as the "Latest Release" on GitHu
 
 ---
 
+
+
 ## Contributing
 
-Want to help? See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for dev setup, code style, commit conventions, and how to submit a PR.
+Want to help? See `[CONTRIBUTING.md](./CONTRIBUTING.md)` for dev setup, code style, commit conventions, and how to submit a PR.
 
 ---
+
+
 
 ## License
 
@@ -196,11 +230,24 @@ The app's Help > About screen lists all open-source component licenses as requir
 
 ---
 
+
+
+## Credits
+
+| Role | Credit |
+|---|---|
+| Original desktop app | [Senriki](https://github.com/senriki) — Electron, FFmpeg export, visualizer engine |
+| Web version & UI rebuild | [Coffet](https://github.com/Coffet) — browser runtime, landing, and rebuilt editor UI |
+
+This repo is a fork of [senriki/SPulse](https://github.com/senriki/SPulse).
+
+---
+
 ## Connect
 
-If you'd like to follow along or support future development:
+If you'd like to follow along or support Senriki’s desktop work:
 
-[![X](https://img.shields.io/badge/X-%40SenrikiSorani-black?logo=x&style=flat-square)](https://x.com/SenrikiSorani)
-[![Website](https://img.shields.io/badge/website-singularitypulse.com-blueviolet?style=flat-square)](https://singularitypulse.com/)
-[![Patreon](https://img.shields.io/badge/Patreon-support-f96854?logo=patreon&logoColor=white&style=flat-square)](https://www.patreon.com/cw/SenrikiSorani)
-[![YouTube](https://img.shields.io/badge/YouTube-%40senrikis-red?logo=youtube&logoColor=white&style=flat-square)](https://www.youtube.com/@senrikis)
+[X](https://x.com/SenrikiSorani)
+[Website](https://singularitypulse.com/)
+[Patreon](https://www.patreon.com/cw/SenrikiSorani)
+[YouTube](https://www.youtube.com/@senrikis)
