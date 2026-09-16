@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,6 +9,7 @@
     content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file:; media-src 'self' blob: file:; connect-src 'self' blob:">
   <title>SPulse</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <script src="ui/themeBoot.js"></script>
   <link rel="stylesheet" href="styles/main.css">
   <link rel="stylesheet" href="styles/controls.css">
   <link rel="stylesheet" href="styles/home.css">
@@ -72,141 +73,237 @@
   </section>
 
   <div id="studio" class="studio" hidden>
-  <!-- Custom in-app menu bar — Windows/Linux only (macOS keeps its native
-       top-of-screen menu). Hidden by default; menuBar.js reveals it after
-       checking window.api.platform. Full-width, top of the window — same
-       collapse/expand drawer mechanism as the left/right panel-toggle tabs
-       (src/index.html's #toggle-left-panel/#toggle-right-panel), just
-       horizontal instead of vertical. -->
-  <div class="app-menu-bar hidden" id="app-menu-bar">
-    <button class="app-menu-toggle" id="app-menu-toggle" type="button" title="Collapse menu bar">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l5-5 5 5"/></svg>
-    </button>
-    <nav class="menu-bar" id="menu-bar">
-      <div class="menu-item" data-menu="file">
-        <button class="menu-trigger" type="button">File</button>
-        <div class="menu-dropdown" role="menu">
-          <button class="menu-action" data-action="new-session">New Session</button>
-          <button class="menu-action" data-action="reset-settings">Reset Settings (Keep Audio)</button>
-          <div class="menu-separator"></div>
-          <button class="menu-action" data-action="open-audio">Open Audio…</button>
-          <button class="menu-action" data-action="save-project">Save Project</button>
-          <button class="menu-action" data-action="load-project">Load Project…</button>
-          <div class="menu-separator desktop-only" id="menu-recent-separator" hidden></div>
-          <div class="menu-recent-projects desktop-only" id="menu-recent-projects"></div>
-          <div class="menu-separator"></div>
-          <button class="menu-action" data-action="export-project">Export Project…</button>
-          <button class="menu-action" data-action="import-project">Import Project…</button>
-          <div class="menu-separator desktop-only"></div>
-          <button class="menu-action desktop-only" data-action="quit">Quit</button>
-        </div>
-      </div>
-      <div class="menu-item" data-menu="edit">
-        <button class="menu-trigger" type="button">Edit</button>
-        <div class="menu-dropdown" role="menu">
-          <button class="menu-action" data-action="undo">Undo</button>
-          <button class="menu-action" data-action="redo">Redo</button>
-        </div>
-      </div>
-      <div class="menu-item" data-menu="help">
-        <button class="menu-trigger" type="button">Help</button>
-        <div class="menu-dropdown" role="menu">
-          <button class="menu-action" data-action="about">About SPulse</button>
-          <button class="menu-action" data-action="check-updates">Check for Updates…</button>
-        </div>
-      </div>
-    </nav>
-  </div>
-
-  <div id="web-session-bar" class="web-session-bar hidden" role="status">
-    This tab is temporary. Refresh or close it and unsaved work is gone — download a project to keep it, or open that file in the desktop app for MP4.
-  </div>
-
-  <div class="app-layout">
-
-    <!-- ═══════════════════════════════════════
-         LEFT PANEL — Visualization Controls
-         ═══════════════════════════════════════ -->
-    <aside class="panel left-panel" id="left-panel">
-      <div class="panel-header">
-        <svg class="app-icon" viewBox="0 0 20 20" fill="none">
-          <rect x="1" y="12" width="2" height="6" rx="1" fill="#00D4FF"/>
-          <rect x="4" y="8"  width="2" height="10" rx="1" fill="#00D4FF"/>
-          <rect x="7" y="5"  width="2" height="13" rx="1" fill="#00D4FF"/>
-          <rect x="10" y="9" width="2" height="9"  rx="1" fill="#00D4FF"/>
-          <rect x="13" y="6" width="2" height="12" rx="1" fill="#00D4FF"/>
-          <rect x="16" y="10" width="2" height="8" rx="1" fill="#00D4FF"/>
+  <!-- Studio chrome: one top bar (brand + File/Edit/Help + audio + export). -->
+  <header class="studio-topbar">
+    <div class="studio-topbar-start">
+      <div class="studio-brand">
+        <svg class="app-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <rect x="1" y="10" width="2" height="6" rx="1" fill="currentColor"/>
+          <rect x="4" y="6"  width="2" height="10" rx="1" fill="currentColor"/>
+          <rect x="7" y="3"  width="2" height="13" rx="1" fill="currentColor"/>
+          <rect x="10" y="7" width="2" height="9"  rx="1" fill="currentColor"/>
+          <rect x="13" y="4" width="2" height="12" rx="1" fill="currentColor"/>
+          <rect x="16" y="8" width="2" height="8" rx="1" fill="currentColor"/>
         </svg>
         <span class="app-name">SPulse</span>
       </div>
 
+      <!-- Windows/Linux in-app File/Edit/Help. Hidden by default; menuBar.js
+           reveals it after checking platform. macOS keeps the native menu. -->
+      <div class="app-menu-bar hidden" id="app-menu-bar">
+        <nav class="menu-bar" id="menu-bar">
+          <div class="menu-item" data-menu="file">
+            <button class="menu-trigger" type="button">File</button>
+            <div class="menu-dropdown" role="menu">
+              <button class="menu-action" data-action="new-session">New Session</button>
+              <button class="menu-action" data-action="reset-settings">Reset Settings (Keep Audio)</button>
+              <div class="menu-separator"></div>
+              <button class="menu-action" data-action="open-audio">Open Audio…</button>
+              <button class="menu-action" data-action="save-project">Save Project</button>
+              <button class="menu-action" data-action="load-project">Load Project…</button>
+              <div class="menu-separator desktop-only" id="menu-recent-separator" hidden></div>
+              <div class="menu-recent-projects desktop-only" id="menu-recent-projects"></div>
+              <div class="menu-separator"></div>
+              <button class="menu-action" data-action="export-project">Export Project…</button>
+              <button class="menu-action" data-action="import-project">Import Project…</button>
+              <div class="menu-separator desktop-only"></div>
+              <button class="menu-action desktop-only" data-action="quit">Quit</button>
+            </div>
+          </div>
+          <div class="menu-item" data-menu="edit">
+            <button class="menu-trigger" type="button">Edit</button>
+            <div class="menu-dropdown" role="menu">
+              <button class="menu-action" data-action="undo">Undo</button>
+              <button class="menu-action" data-action="redo">Redo</button>
+            </div>
+          </div>
+          <div class="menu-item" data-menu="help">
+            <button class="menu-trigger" type="button">Help</button>
+            <div class="menu-dropdown" role="menu">
+              <button class="menu-action" data-action="about">About SPulse</button>
+              <button class="menu-action" data-action="check-updates">Check for Updates…</button>
+            </div>
+          </div>
+        </nav>
+      </div>
+
+      <button type="button" class="studio-track" id="studio-track" data-empty="true" title="Open audio file">
+        <svg class="studio-track-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+        <span class="studio-track-name" id="studio-track-name">Open audio</span>
+      </button>
+    </div>
+
+    <div class="studio-topbar-actions">
+      <span id="web-session-bar" class="web-session-bar hidden">
+        <button type="button" class="web-session-info" aria-describedby="web-session-tip" aria-label="This browser tab does not save automatically">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4M12 8h.01"/>
+          </svg>
+        </button>
+        <span id="web-session-tip" class="web-session-tip" role="tooltip">
+          This tab is temporary. Refresh or close it and unsaved work is gone — download a project to keep it, or open that file in the desktop app for MP4.
+        </span>
+      </span>
+
+      <div class="studio-history" role="group" aria-label="History">
+        <button class="btn-icon-sm" id="btn-undo" type="button" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 7v6h6"/>
+            <path d="M3 13a9 9 0 1 0 2.68-6.33L3 8"/>
+          </svg>
+        </button>
+        <button class="btn-icon-sm" id="btn-redo" type="button" title="Redo (Ctrl+Y)" aria-label="Redo" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 7v6h-6"/>
+            <path d="M21 13a9 9 0 1 1-2.68-6.33L21 8"/>
+          </svg>
+        </button>
+      </div>
+      <button class="btn-icon-sm" id="btn-theme" type="button" title="Switch to light mode" aria-label="Switch to light mode" aria-pressed="true">
+        <svg class="icon-theme-sun hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+        </svg>
+        <svg class="icon-theme-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+        </svg>
+      </button>
+      <div class="studio-export">
+        <button class="btn btn-export" id="btn-export" disabled>
+          <svg viewBox="0 0 20 20" fill="currentColor" class="icon-sm" aria-hidden="true"><path d="M10 2v10M5 7l5 5 5-5M3 15h14v2H3z"/></svg>
+          <span id="btn-export-label">Export MP4</span>
+        </button>
+        <p class="export-hint" id="export-hint">Load audio to export</p>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-layout">
+
+    <main class="center-panel" id="center-panel">
+      <button class="panel-toggle panel-toggle-right" id="toggle-right-panel" type="button" title="Collapse panel" aria-label="Toggle inspector">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>
+      </button>
+      <div class="canvas-area" id="canvas-area">
+        <div class="canvas-drop-zone" id="canvas-drop-zone">
+          <div class="canvas-wrapper" id="canvas-wrapper">
+            <canvas id="waveform-canvas" width="1280" height="720"></canvas>
+            <div class="drop-overlay" id="drop-overlay">
+              <div class="drop-message">
+                <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M24 32V12"/>
+                  <path d="M14 22l10-10 10 10"/>
+                  <rect x="8" y="34" width="32" height="10" rx="3"/>
+                </svg>
+                <p class="drop-title">Drop audio here</p>
+                <p class="drop-sub">or press <kbd>Ctrl+O</kbd> to browse</p>
+                <p class="drop-formats">MP3 · WAV · FLAC · AAC · OGG · M4A</p>
+              </div>
+            </div>
+            <div class="fps-badge" id="fps-counter">-- fps</div>
+            <div class="bg-snap-guide bg-snap-guide-v" id="bg-snap-guide-v"></div>
+            <div class="bg-snap-guide bg-snap-guide-h" id="bg-snap-guide-h"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="style-strip" aria-label="Visualizer style">
+        <p class="style-strip-label">Style</p>
+        <div id="style-picker" class="style-picker-grid">
+          <button class="style-btn active" data-mode="bar_classic" title="Classic Bar">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <rect x="2"  y="8"  width="3" height="14" rx="1"/>
+              <rect x="7"  y="4"  width="3" height="18" rx="1"/>
+              <rect x="12" y="10" width="3" height="12" rx="1"/>
+              <rect x="17" y="6"  width="3" height="16" rx="1"/>
+            </svg>
+            <span>Classic</span>
+          </button>
+          <button class="style-btn" data-mode="bar_mirror" title="Mirror Bar">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <rect x="2"  y="10" width="3" height="4" rx="1"/>
+              <rect x="7"  y="7"  width="3" height="10" rx="1"/>
+              <rect x="12" y="9"  width="3" height="6" rx="1"/>
+              <rect x="17" y="8"  width="3" height="8" rx="1"/>
+            </svg>
+            <span>Mirror</span>
+          </button>
+          <button class="style-btn" data-mode="line_smooth" title="Smooth Line">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M2 12 C5 6, 7 6, 9 12 C11 18, 13 18, 15 12 C17 6, 19 6, 22 12"/>
+            </svg>
+            <span>Line</span>
+          </button>
+          <button class="style-btn" data-mode="line_fill" title="Filled Wave">
+            <svg viewBox="0 0 24 24">
+              <path d="M2 16 C5 10,7 10,9 14 C11 18,13 18,15 14 C17 10,19 10,22 14 L22 20 L2 20Z" fill="currentColor" opacity="0.8"/>
+            </svg>
+            <span>Fill</span>
+          </button>
+          <button class="style-btn" data-mode="radial_pulse" title="Radial Pulse">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="3"/>
+              <circle cx="12" cy="12" r="6"/>
+              <circle cx="12" cy="12" r="9"/>
+            </svg>
+            <span>Radial</span>
+          </button>
+          <button class="style-btn" data-mode="spectrum_glow" title="Spectrum Glow">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <rect x="2"  y="14" width="2" height="8" rx="1" fill="#ff6b6b"/>
+              <rect x="5"  y="10" width="2" height="12" rx="1" fill="#ffa94d"/>
+              <rect x="8"  y="6"  width="2" height="16" rx="1" fill="#69db7c"/>
+              <rect x="11" y="9"  width="2" height="13" rx="1" fill="#4dabf7"/>
+              <rect x="14" y="12" width="2" height="10" rx="1" fill="#9775fa"/>
+              <rect x="17" y="8"  width="2" height="14" rx="1" fill="#f783ac"/>
+            </svg>
+            <span>Glow</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="transport-bar" id="transport-bar">
+        <button class="btn btn-icon" id="btn-play-pause" title="Play / Pause (Space)" disabled>
+          <svg class="icon icon-play" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,4 20,12 6,20"/></svg>
+          <svg class="icon icon-pause hidden" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="3" width="4" height="18" rx="1"/><rect x="15" y="3" width="4" height="18" rx="1"/></svg>
+        </button>
+        <span class="time-label" id="time-current">0:00</span>
+        <div class="scrubber-track" id="scrubber-track">
+          <div class="scrubber-fill"  id="scrubber-fill"></div>
+          <div class="scrubber-thumb" id="scrubber-thumb"></div>
+        </div>
+        <span class="time-label" id="time-total">0:00</span>
+        <button class="btn-icon-sm" id="btn-fullscreen" title="Toggle Fullscreen (F11)">
+          <svg class="icon-fs-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/>
+          </svg>
+          <svg class="icon-fs-exit hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 3v3a2 2 0 0 1-2 2H4M15 3v3a2 2 0 0 0 2 2h3M9 21v-3a2 2 0 0 0-2-2H4M15 21v-3a2 2 0 0 1 2-2h3"/>
+          </svg>
+        </button>
+      </div>
+    </main>
+
+    <aside class="panel inspector right-panel" id="right-panel">
+      <div class="inspector-head">
+        <h2 class="inspector-title">Inspector</h2>
+      </div>
+
+      <div class="tab-bar" role="tablist" aria-label="Inspector">
+        <button class="tab-btn active" data-tab="look" type="button" aria-selected="true">Look</button>
+        <button class="tab-btn" data-tab="scene" type="button" aria-selected="false">Scene</button>
+        <button class="tab-btn" data-tab="export" type="button" aria-selected="false">Export</button>
+      </div>
+
       <div class="panel-body">
 
-        <div class="tab-bar" role="tablist" aria-label="Visualizer controls">
-          <button class="tab-btn active" data-tab="waveform" type="button" aria-selected="true">Waveform</button>
-          <button class="tab-btn" data-tab="motion" type="button" aria-selected="false">Motion</button>
-          <button class="tab-btn" data-tab="background" type="button" aria-selected="false">Background</button>
-        </div>
+        <div id="left-panel">
 
-        <div class="tab-panel" data-tab-group="waveform">
+        <div class="tab-panel" data-tab-group="look">
 
-        <!-- Visualizer Style Picker -->
-        <section class="panel-section">
-          <h3 class="section-label">Visualizer Style</h3>
-          <div id="style-picker" class="style-picker-grid">
-            <button class="style-btn active" data-mode="bar_classic" title="Classic Bar">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <rect x="2"  y="8"  width="3" height="14" rx="1"/>
-                <rect x="7"  y="4"  width="3" height="18" rx="1"/>
-                <rect x="12" y="10" width="3" height="12" rx="1"/>
-                <rect x="17" y="6"  width="3" height="16" rx="1"/>
-              </svg>
-              <span>Classic</span>
-            </button>
-            <button class="style-btn" data-mode="bar_mirror" title="Mirror Bar">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <rect x="2"  y="10" width="3" height="4" rx="1"/>
-                <rect x="7"  y="7"  width="3" height="10" rx="1"/>
-                <rect x="12" y="9"  width="3" height="6" rx="1"/>
-                <rect x="17" y="8"  width="3" height="8" rx="1"/>
-              </svg>
-              <span>Mirror</span>
-            </button>
-            <button class="style-btn" data-mode="line_smooth" title="Smooth Line">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <path d="M2 12 C5 6, 7 6, 9 12 C11 18, 13 18, 15 12 C17 6, 19 6, 22 12"/>
-              </svg>
-              <span>Line</span>
-            </button>
-            <button class="style-btn" data-mode="line_fill" title="Filled Wave">
-              <svg viewBox="0 0 24 24">
-                <path d="M2 16 C5 10,7 10,9 14 C11 18,13 18,15 14 C17 10,19 10,22 14 L22 20 L2 20Z" fill="currentColor" opacity="0.8"/>
-              </svg>
-              <span>Fill</span>
-            </button>
-            <button class="style-btn" data-mode="radial_pulse" title="Radial Pulse">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <circle cx="12" cy="12" r="3"/>
-                <circle cx="12" cy="12" r="6"/>
-                <circle cx="12" cy="12" r="9"/>
-              </svg>
-              <span>Radial</span>
-            </button>
-            <button class="style-btn" data-mode="spectrum_glow" title="Spectrum Glow">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <rect x="2"  y="14" width="2" height="8" rx="1" fill="#ff6b6b"/>
-                <rect x="5"  y="10" width="2" height="12" rx="1" fill="#ffa94d"/>
-                <rect x="8"  y="6"  width="2" height="16" rx="1" fill="#69db7c"/>
-                <rect x="11" y="9"  width="2" height="13" rx="1" fill="#4dabf7"/>
-                <rect x="14" y="12" width="2" height="10" rx="1" fill="#9775fa"/>
-                <rect x="17" y="8"  width="2" height="14" rx="1" fill="#f783ac"/>
-              </svg>
-              <span>Glow</span>
-            </button>
-          </div>
-        </section>
-
-        <!-- Channel Mode (Stereo) -->
         <section class="panel-section">
           <h3 class="section-label">Channel Mode</h3>
           <div class="radio-row" id="channel-mode-selector">
@@ -241,7 +338,6 @@
           </div>
         </section>
 
-        <!-- Color Controls -->
         <section class="panel-section">
           <h3 class="section-label">Waveform Color</h3>
           <div class="control-group">
@@ -261,9 +357,8 @@
           </div>
         </section>
 
-        <!-- Size Controls -->
         <section class="panel-section">
-          <h3 class="section-label">Size & Shape</h3>
+          <h3 class="section-label">Size &amp; Shape</h3>
           <div class="control-group" id="bar-width-group">
             <label class="control-label">Bar Width <span class="value-display" id="bar-width-val">4px</span></label>
             <input type="range" id="bar-width" class="range-input" min="1" max="32" value="4">
@@ -298,11 +393,6 @@
           </div>
         </section>
 
-        </div>
-
-        <div class="tab-panel hidden" data-tab-group="motion">
-
-        <!-- Smoothing & Sensitivity -->
         <section class="panel-section">
           <h3 class="section-label">Reactivity</h3>
           <div class="control-group">
@@ -315,7 +405,6 @@
           </div>
         </section>
 
-        <!-- Position -->
         <section class="panel-section">
           <h3 class="section-label">Position</h3>
           <div class="control-group">
@@ -332,14 +421,13 @@
 
         </div>
 
-        <div class="tab-panel hidden" data-tab-group="background">
+        <div class="tab-panel hidden" data-tab-group="scene">
 
-        <!-- Background -->
         <section class="panel-section">
           <h3 class="section-label">Background</h3>
           <div class="radio-row" id="bg-type-selector">
             <label class="radio-label"><input type="radio" name="bg-type" value="solid" checked> Solid</label>
-            <label class="radio-label"><input type="radio" name="bg-type" value="gradient"> Grad</label>
+            <label class="radio-label"><input type="radio" name="bg-type" value="gradient"> Gradient</label>
             <label class="radio-label"><input type="radio" name="bg-type" value="image"> Image</label>
             <label class="radio-label"><input type="radio" name="bg-type" value="video"> Video</label>
           </div>
@@ -391,7 +479,6 @@
           </div>
         </section>
 
-        <!-- Background Position & Fit (image/video only) -->
         <section class="panel-section hidden" id="bg-position-section">
           <h3 class="section-label">Background Position &amp; Fit</h3>
           <div class="control-group">
@@ -419,91 +506,10 @@
 
         </div>
 
-      </div>
-    </aside>
+        </div><!-- /#left-panel -->
 
-    <!-- ═══════════════════════════════════════
-         CENTER PANEL — Canvas + Transport
-         ═══════════════════════════════════════ -->
-    <main class="center-panel" id="center-panel">
-      <button class="panel-toggle panel-toggle-left" id="toggle-left-panel" type="button" title="Collapse panel" aria-label="Toggle visualizer panel">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>
-      </button>
-      <button class="panel-toggle panel-toggle-right" id="toggle-right-panel" type="button" title="Collapse panel" aria-label="Toggle export panel">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>
-      </button>
-      <div class="canvas-area" id="canvas-area">
-        <div class="canvas-drop-zone" id="canvas-drop-zone">
-          <div class="canvas-wrapper" id="canvas-wrapper">
-            <canvas id="waveform-canvas" width="1280" height="720"></canvas>
-            <div class="drop-overlay" id="drop-overlay">
-              <div class="drop-message">
-                <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M24 32V12"/>
-                  <path d="M14 22l10-10 10 10"/>
-                  <rect x="8" y="34" width="32" height="10" rx="3"/>
-                </svg>
-                <p class="drop-title">Drop audio here</p>
-                <p class="drop-sub">or press <kbd>Ctrl+O</kbd> to browse</p>
-                <p class="drop-formats">MP3 · WAV · FLAC · AAC · OGG · M4A</p>
-              </div>
-            </div>
-            <div class="fps-badge" id="fps-counter">-- fps</div>
-            <div class="bg-snap-guide bg-snap-guide-v" id="bg-snap-guide-v"></div>
-            <div class="bg-snap-guide bg-snap-guide-h" id="bg-snap-guide-h"></div>
-          </div>
-        </div>
-      </div>
+        <div class="tab-panel hidden" data-tab-group="scene">
 
-      <div class="transport-bar" id="transport-bar">
-        <button class="btn btn-icon" id="btn-play-pause" title="Play / Pause (Space)" disabled>
-          <svg class="icon icon-play" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,4 20,12 6,20"/></svg>
-          <svg class="icon icon-pause hidden" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="3" width="4" height="18" rx="1"/><rect x="15" y="3" width="4" height="18" rx="1"/></svg>
-        </button>
-        <span class="time-label" id="time-current">0:00</span>
-        <div class="scrubber-track" id="scrubber-track">
-          <div class="scrubber-fill"  id="scrubber-fill"></div>
-          <div class="scrubber-thumb" id="scrubber-thumb"></div>
-        </div>
-        <span class="time-label" id="time-total">0:00</span>
-        <button class="btn-icon-sm" id="btn-fullscreen" title="Toggle Fullscreen (F11)">
-          <svg class="icon-fs-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/>
-          </svg>
-          <svg class="icon-fs-exit hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 3v3a2 2 0 0 1-2 2H4M15 3v3a2 2 0 0 0 2 2h3M9 21v-3a2 2 0 0 0-2-2H4M15 21v-3a2 2 0 0 1 2-2h3"/>
-          </svg>
-        </button>
-      </div>
-    </main>
-
-    <!-- ═══════════════════════════════════════
-         RIGHT PANEL — Export & Metadata
-         ═══════════════════════════════════════ -->
-    <aside class="panel right-panel" id="right-panel">
-      <div class="panel-body">
-
-        <div class="tab-bar" role="tablist" aria-label="Audio and export">
-          <button class="tab-btn active" data-tab="audio" type="button" aria-selected="true">Audio</button>
-          <button class="tab-btn" data-tab="export" type="button" aria-selected="false">Export</button>
-        </div>
-
-        <div class="tab-panel" data-tab-group="audio">
-
-        <!-- Audio Info -->
-        <section class="panel-section">
-          <h3 class="section-label">Audio File</h3>
-          <div id="audio-info-empty" class="empty-state">No file loaded</div>
-          <div id="audio-meta" class="audio-meta hidden">
-            <div class="meta-row"><span class="meta-key">Title</span>    <span class="meta-val" id="meta-title">—</span></div>
-            <div class="meta-row"><span class="meta-key">Artist</span>   <span class="meta-val" id="meta-artist">—</span></div>
-            <div class="meta-row"><span class="meta-key">Duration</span> <span class="meta-val" id="meta-duration">—</span></div>
-            <div class="meta-row"><span class="meta-key">Format</span>   <span class="meta-val" id="meta-format">—</span></div>
-          </div>
-          <button class="btn btn-secondary btn-sm mt-6" id="btn-open-audio">Open Audio File…</button>
-        </section>
-
-        <!-- Text Overlay -->
         <section class="panel-section">
           <div class="section-label-row">
             <h3 class="section-label">Text Overlay</h3>
@@ -582,7 +588,18 @@
 
         <div class="tab-panel hidden" data-tab-group="export">
 
-        <!-- Resolution -->
+        <section class="panel-section">
+          <h3 class="section-label">Audio File</h3>
+          <div id="audio-info-empty" class="empty-state">No file loaded</div>
+          <div id="audio-meta" class="audio-meta hidden">
+            <div class="meta-row"><span class="meta-key">Title</span>    <span class="meta-val" id="meta-title">—</span></div>
+            <div class="meta-row"><span class="meta-key">Artist</span>   <span class="meta-val" id="meta-artist">—</span></div>
+            <div class="meta-row"><span class="meta-key">Duration</span> <span class="meta-val" id="meta-duration">—</span></div>
+            <div class="meta-row"><span class="meta-key">Format</span>   <span class="meta-val" id="meta-format">—</span></div>
+          </div>
+          <button class="btn btn-secondary btn-sm mt-6" id="btn-open-audio">Open Audio File…</button>
+        </section>
+
         <section class="panel-section">
           <h3 class="section-label">Resolution</h3>
           <div class="control-group">
@@ -603,7 +620,6 @@
           </div>
         </section>
 
-        <!-- Export Settings -->
         <section class="panel-section">
           <h3 class="section-label">Export Settings</h3>
           <div class="control-group">
@@ -662,7 +678,6 @@
           </div>
         </section>
 
-        <!-- Project Save / Load -->
         <section class="panel-section">
           <h3 class="section-label">Project</h3>
           <div class="output-row">
@@ -679,15 +694,6 @@
           <button class="btn btn-destructive btn-sm w-full mt-6" id="btn-reset-defaults">Reset to Default</button>
         </section>
 
-        </div>
-
-        <!-- Export Action -->
-        <div class="export-action">
-          <button class="btn btn-export" id="btn-export" disabled>
-            <svg viewBox="0 0 20 20" fill="currentColor" class="icon-sm" aria-hidden="true"><path d="M10 2v10M5 7l5 5 5-5M3 15h14v2H3z"/></svg>
-            <span id="btn-export-label">Export MP4</span>
-          </button>
-          <p class="export-hint" id="export-hint">Load an audio file to export</p>
         </div>
 
       </div>

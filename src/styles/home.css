@@ -13,10 +13,24 @@
   align-items: center;
   justify-content: center;
   padding: clamp(1.5rem, 5vw, 3rem);
-  background: var(--color-app-bg);
-  color: var(--color-text-primary);
+  --color-app-bg: #0D1117;
+  --color-panel-bg: #161B22;
+  --color-panel-border: #21262D;
+  --color-surface-hover: #1C2128;
+  --color-accent: #00D4FF;
+  --color-text-primary: #E6EDF3;
+  --color-text-secondary: #8B949E;
+  --color-text-muted: #6E7681;
+  background: #0D1117;
+  color: #E6EDF3;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 16px;
   line-height: 1.5;
+}
+
+body.home-active {
+  background: #0D1117;
+  color: #E6EDF3;
 }
 
 .home-shell {

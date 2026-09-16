@@ -11,9 +11,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--color-text-secondary);
-  margin-bottom: 4px;
+  margin-bottom: 5px;
 }
 
 .value-display {
@@ -30,9 +30,9 @@
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 4px;
+  height: 5px;
   background: var(--color-surface-active);
-  border-radius: 2px;
+  border-radius: 999px;
   outline: none;
   cursor: pointer;
   border: none;
@@ -101,9 +101,9 @@
 .radio-label {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: var(--color-text-secondary);
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text-primary);
   cursor: pointer;
 }
 
@@ -116,9 +116,9 @@
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 12px;
-  color: var(--color-text-secondary);
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-text-primary);
   cursor: pointer;
 }
 
@@ -136,8 +136,8 @@
   border: 1px solid var(--color-panel-border);
   border-radius: var(--radius-sm);
   color: var(--color-text-primary);
-  font-size: 12px;
-  font-family: var(--font-ui);
+  font-size: 13px;
+  font-family: inherit;
   padding: 5px 8px;
   outline: none;
   transition: border-color var(--transition-fast);
@@ -183,8 +183,8 @@
   border: 1px solid var(--color-panel-border);
   border-radius: var(--radius-sm);
   color: var(--color-text-primary);
-  font-size: 12px;
-  font-family: var(--font-ui);
+  font-size: 13px;
+  font-family: inherit;
   padding: 5px 8px;
   outline: none;
   cursor: pointer;
@@ -207,9 +207,9 @@
   gap: 6px;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
-  font-size: 12px;
-  font-family: var(--font-ui);
-  font-weight: 500;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 550;
   cursor: pointer;
   padding: 6px 12px;
   transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), opacity var(--transition-fast);
@@ -243,10 +243,37 @@
   padding: 4px 9px;
 }
 
+/* Icon-only buttons — pin the glyph in the middle. Leave .style-btn alone. */
+.btn-icon,
+.btn-icon-sm:not(#btn-pick-output),
+.web-session-info {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0;
+  line-height: 0;
+}
+
+.btn-icon svg,
+.btn-icon-sm:not(#btn-pick-output) svg,
+.web-session-info svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  display: block;
+}
+
+#btn-play-pause .icon-play {
+  transform: translate(calc(-50% + 1px), -50%);
+}
+
 /* Icon button (play/pause) */
 .btn-icon {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   background: var(--color-surface-active);
   border-color: var(--color-panel-border);
@@ -276,17 +303,38 @@
   border: 1px solid var(--color-panel-border);
   color: var(--color-text-secondary);
   border-radius: var(--radius-sm);
-  font-size: 13px;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.btn-icon-sm svg {
+  width: 15px;
+  height: 15px;
+}
+
+#btn-pick-output {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.web-session-info {
+  font-size: 0;
+  line-height: 0;
+}
+
+.web-session-info svg {
+  width: 15px;
+  height: 15px;
 }
 
 .btn-icon-sm:hover {
   background: var(--color-surface-hover);
   color: var(--color-text-primary);
+}
+
+.btn-icon-sm:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 /* Export button */
@@ -295,18 +343,17 @@
   padding: 10px 16px;
   background: var(--color-accent);
   border-color: var(--color-accent);
-  color: #000;
+  color: var(--color-accent-ink);
   font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-weight: 650;
+  letter-spacing: -0.01em;
   border-radius: var(--radius-md);
   gap: 8px;
 }
 
 .btn-export:hover:not(:disabled) {
-  background: #1de0ff;
-  border-color: #1de0ff;
-  box-shadow: 0 0 12px var(--color-accent-glow);
+  background: color-mix(in oklch, var(--color-accent) 88%, white);
+  border-color: transparent;
 }
 
 .btn-export:disabled {

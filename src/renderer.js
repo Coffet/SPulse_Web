@@ -18,6 +18,7 @@ import { historyManager }                  from './history/historyManager.js'
 import { initErrorDialog }                 from './ui/errorDialog.js'
 import { initAboutScreen, showAbout }      from './ui/aboutScreen.js'
 import { initUpdateBanner, checkForUpdatesManually } from './ui/updateBanner.js'
+import { initTheme }                       from './ui/theme.js'
 import { ensurePlatformApi, isWeb }        from './platform/webApi.js'
 import { drawBarMirror }   from './visualizer/modes/barMirror.js'
 import { drawLineSmooth }  from './visualizer/modes/lineSmooth.js'
@@ -81,7 +82,6 @@ const btnExport     = document.getElementById('btn-export')
 const exportHint    = document.getElementById('export-hint')
 const audioInfoEmpty = document.getElementById('audio-info-empty')
 const btnFullscreen = document.getElementById('btn-fullscreen')
-const toggleLeftPanel  = document.getElementById('toggle-left-panel')
 const toggleRightPanel = document.getElementById('toggle-right-panel')
 const appLayout     = document.querySelector('.app-layout')
 const audioMeta     = document.getElementById('audio-meta')
@@ -105,6 +105,14 @@ async function loadAudio(arrayBuffer, filePath, displayName) {
     analyser.setBuffer(loader.audioBuffer)
     analyser.onEnded = () => _onPlaybackEnded()
 
+    // Decode first so a bad second file doesn't kill the track that's already loaded.
+    // Then tear down the previous AudioContext — otherwise it keeps playing and the
+    // canvas/play button stay wired to a mix of old source + new analyser.
+    const prevPath = appState.filePath
+    const wasPlaying = !!appState.analyser?.isPlaying
+    _unloadAudio()
+    _revokeBlobUrl(prevPath, filePath)
+
     appState.loaded      = true
     appState.filePath    = filePath
     appState.fileName    = displayName || loader.fileName
@@ -115,15 +123,15 @@ async function loadAudio(arrayBuffer, filePath, displayName) {
     _enableTransport(loader.duration)
     dropOverlay.classList.add('hidden')
 
-    // Pre-fill overlay text fields with parsed metadata
-    // Setting .value directly doesn't fire 'input', so mirror into state too
-    if (overlayTitle  && loader.metadata.title) {
-      overlayTitle.value = loader.metadata.title
-      visualizerState.overlay.title = loader.metadata.title
+    // Always replace overlay copy from the new file so the previous track's
+    // title/artist don't stick around when the next file has none.
+    if (overlayTitle) {
+      overlayTitle.value = loader.metadata.title || ''
+      visualizerState.overlay.title = loader.metadata.title || ''
     }
-    if (overlayArtist && loader.metadata.artist) {
-      overlayArtist.value = loader.metadata.artist
-      visualizerState.overlay.artist = loader.metadata.artist
+    if (overlayArtist) {
+      overlayArtist.value = loader.metadata.artist || ''
+      visualizerState.overlay.artist = loader.metadata.artist || ''
     }
 
     // Suggest default output filename and sync exportSettings
@@ -136,6 +144,12 @@ async function loadAudio(arrayBuffer, filePath, displayName) {
     // Notify canvas engine (task-4 listens for this)
     window.dispatchEvent(new CustomEvent('audio-loaded', { detail: appState }))
     _setDirty()
+
+    if (wasPlaying) {
+      appState.analyser.play()
+      canvasEngine.start()
+      _syncPlayIcon(true)
+    }
 
     // Clear a lingering "Audio not found" warning (see _applyProjectData) now that a
     // file loaded successfully — this is the audio re-link flow completing.
@@ -156,6 +170,9 @@ function _updateMetaUI(loader) {
   metaDuration.textContent = _fmtTime(loader.duration)
   audioInfoEmpty.classList.add('hidden')
   audioMeta.classList.remove('hidden')
+  const trackName = document.getElementById('studio-track-name')
+  if (trackName) trackName.textContent = appState.fileName || loader.fileName || 'Audio loaded'
+  _setStudioTrackEmpty(false)
 }
 
 function _enableTransport(duration) {
@@ -164,8 +181,9 @@ function _enableTransport(duration) {
   exportHint.textContent = isWeb()
     ? 'Records in real time · desktop app exports MP4 faster'
     : 'Ready to export'
+  if (btnExport) btnExport.title = exportHint.textContent
   timeTotal.textContent  = _fmtTime(duration)
-  timeCurrent.textContent = '0:00'
+  _updateScrubber(0, duration)
 }
 
 // ─── Play / Pause ─────────────────────────────────────────────────────────────
@@ -205,6 +223,12 @@ function _unloadAudio() {
   _syncPlayIcon(false)
 }
 
+function _revokeBlobUrl(prevPath, nextPath) {
+  if (!prevPath || prevPath === nextPath) return
+  if (!String(prevPath).startsWith('blob:')) return
+  try { URL.revokeObjectURL(prevPath) } catch {}
+}
+
 // Reset the audio-related UI back to its "nothing loaded" state — call alongside
 // _unloadAudio() whenever there's no guarantee new audio will load right after.
 function _resetAudioUI() {
@@ -213,12 +237,23 @@ function _resetAudioUI() {
   btnPlay.disabled        = true
   btnExport.disabled      = true
   exportHint.textContent  = 'Load an audio file to export'
+  if (btnExport) btnExport.title = exportHint.textContent
   timeCurrent.textContent = '0:00'
   timeTotal.textContent   = '0:00'
   scrubberFill.style.width = '0%'
   scrubberThumb.style.left = '0%'
   _resetDropMessage()
   dropOverlay.classList.remove('hidden')
+  const trackName = document.getElementById('studio-track-name')
+  if (trackName) trackName.textContent = 'Open audio'
+  _setStudioTrackEmpty(true)
+}
+
+function _setStudioTrackEmpty(empty) {
+  const track = document.getElementById('studio-track')
+  if (!track) return
+  track.dataset.empty = empty ? 'true' : 'false'
+  track.title = empty ? 'Open audio file' : (document.getElementById('studio-track-name')?.textContent || 'Open audio file')
 }
 
 function _onPlaybackEnded() {
@@ -436,6 +471,7 @@ async function _openFilePicker() {
 }
 
 btnOpenAudio.addEventListener('click', _openFilePicker)
+document.getElementById('studio-track')?.addEventListener('click', _openFilePicker)
 
 // ─── Keyboard shortcuts ───────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
@@ -481,16 +517,13 @@ document.addEventListener('fullscreenchange', () => {
 
 btnFullscreen?.addEventListener('click', _toggleFullscreen)
 
-// ─── Collapsible side panels ──────────────────────────────────────────────────
-const leftPanelEl  = document.getElementById('left-panel')
+// ─── Collapsible inspector ────────────────────────────────────────────────────
 const rightPanelEl = document.getElementById('right-panel')
-let _leftPanelCollapsed  = false
 let _rightPanelCollapsed = false
 
 function _applyPanelWidths() {
-  const l = _leftPanelCollapsed  ? '0px' : 'var(--panel-left-width)'
-  const r = _rightPanelCollapsed ? '0px' : 'var(--panel-right-width)'
-  if (appLayout) appLayout.style.gridTemplateColumns = `${l} 1fr ${r}`
+  const r = _rightPanelCollapsed ? '0px' : 'var(--panel-inspector-width)'
+  if (appLayout) appLayout.style.gridTemplateColumns = `minmax(0, 1fr) ${r}`
 }
 
 // Wait for the collapse transition to finish before re-measuring canvas-area —
@@ -503,14 +536,6 @@ appLayout?.addEventListener('transitionend', e => {
 // vertical space the canvas area can grow into.
 document.getElementById('app-menu-bar')?.addEventListener('transitionend', e => {
   if (e.propertyName === 'height') canvasEngine.refitPreview()
-})
-
-toggleLeftPanel?.addEventListener('click', () => {
-  _leftPanelCollapsed = !_leftPanelCollapsed
-  _applyPanelWidths()
-  leftPanelEl?.classList.toggle('collapsed', _leftPanelCollapsed)
-  toggleLeftPanel.classList.toggle('collapsed', _leftPanelCollapsed)
-  toggleLeftPanel.title = _leftPanelCollapsed ? 'Expand panel' : 'Collapse panel'
 })
 
 toggleRightPanel?.addEventListener('click', () => {
@@ -592,6 +617,7 @@ function _undo() {
   if (!snap) return
   _applySnapshot(snap)
   _setDirty()
+  _syncHistoryButtons()
 }
 
 function _redo() {
@@ -599,7 +625,18 @@ function _redo() {
   if (!snap) return
   _applySnapshot(snap)
   _setDirty()
+  _syncHistoryButtons()
 }
+
+function _syncHistoryButtons() {
+  const undo = document.getElementById('btn-undo')
+  const redo = document.getElementById('btn-redo')
+  if (undo) undo.disabled = !historyManager.canUndo()
+  if (redo) redo.disabled = !historyManager.canRedo()
+}
+
+document.getElementById('btn-undo')?.addEventListener('click', _undo)
+document.getElementById('btn-redo')?.addEventListener('click', _redo)
 
 // Combined handler: snapshot before the change, then mark dirty.
 // Runs in capture phase so visualizerState still holds the PRE-change value.
@@ -608,6 +645,7 @@ function _onPanelControlChange() {
   clearTimeout(_historyTimer)
   _historyTimer = setTimeout(() => { _historyTimer = null }, 500)
   _setDirty()
+  _syncHistoryButtons()
 }
 
 // ─── Project: dirty tracking & title bar ─────────────────────────────────────
@@ -931,6 +969,7 @@ function _newSession() {
   // _projectFilePath already cleared, not the just-abandoned project's path.
   historyManager.clear()
   _projectFilePath = null
+  _syncHistoryButtons()
 
   // Reset visualizer/export settings to defaults — reuses the existing Reset to
   // Default flow (including its immediate last-session.json overwrite).
@@ -1001,6 +1040,7 @@ function applyWebChrome() {
   const exportHintEl = document.getElementById('export-hint')
   if (exportHintEl && !appState.loaded) {
     exportHintEl.textContent = 'Load an audio file to export WebM'
+    btnExport.title = exportHintEl.textContent
   }
   const hint = document.getElementById('project-hint')
   if (hint) hint.textContent = _defaultProjectHint()
@@ -1157,7 +1197,6 @@ document.getElementById('right-panel')?.addEventListener('input',  _scheduleAuto
 initLeftPanel(appState, visualizerState)
 
 // ─── Wire panel tab bars ──────────────────────────────────────────────────────
-initPanelTabs(document.getElementById('left-panel'))
 initPanelTabs(document.getElementById('right-panel'))
 
 // ─── Wire app menu → renderer actions ────────────────────────────────────────
@@ -1192,6 +1231,8 @@ initMenuBar({
 // ─── Init UI components ───────────────────────────────────────────────────────
 initErrorDialog()
 initAboutScreen()
+initTheme()
+_syncHistoryButtons()
 
 // ─── Detect GPU encoders on startup ──────────────────────────────────────────
 initUpdateBanner()

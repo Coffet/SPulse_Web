@@ -69,10 +69,6 @@ async function _handleRecentClick(target, container, separator, actions) {
   await actions.openProjectFile?.(result)
 }
 
-// Collapsed/expanded state (VS Code-style toggle) survives restarts, same
-// localStorage pattern already used for the dismissed-update-version key.
-const COLLAPSED_KEY = 'spulse-menubar-collapsed'
-
 export function initMenuBar(actions) {
   const wrap = document.getElementById('app-menu-bar')
   const bar  = document.getElementById('menu-bar')
@@ -81,16 +77,7 @@ export function initMenuBar(actions) {
   // Web always shows the in-app menu (platform === 'web').
 
   wrap.classList.remove('hidden')
-
-  const toggle = document.getElementById('app-menu-toggle')
-  const collapsed = localStorage.getItem(COLLAPSED_KEY) === 'true'
-  wrap.classList.toggle('collapsed', collapsed)
-  if (toggle) toggle.title = collapsed ? 'Expand menu bar' : 'Collapse menu bar'
-  toggle?.addEventListener('click', () => {
-    const nowCollapsed = wrap.classList.toggle('collapsed')
-    toggle.title = nowCollapsed ? 'Expand menu bar' : 'Collapse menu bar'
-    localStorage.setItem(COLLAPSED_KEY, nowCollapsed)
-  })
+  wrap.classList.remove('collapsed')
 
   const items = [...bar.querySelectorAll('.menu-item')]
   const recentContainer = document.getElementById('menu-recent-projects')
