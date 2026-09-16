@@ -5,15 +5,18 @@ import { visualizerState, resetVisualizerStateToDefaults } from './visualizer/vi
 import { initLeftPanel }   from './controls/leftPanel.js'
 import { initPanelTabs }   from './controls/panelTabs.js'
 import { initStylePicker }      from './controls/stylePicker.js'
+import { updateBarWidthVisibility } from './controls/leftPanel.js'
 import { backgroundRenderer }   from './background/backgroundRenderer.js'
 import { textOverlay }          from './overlay/textOverlay.js'
 import { initOverlayControls }  from './controls/overlayControls.js'
+import { initMenuBar }          from './controls/menuBar.js'
 import { startExport }               from './export/exportPipeline.js'
 import { exportSettings, resetExportSettingsToDefaults } from './export/exportSettings.js'
 import { serializeState, deserializeState, serializePortableState } from './project/projectManager.js'
 import { historyManager }                  from './history/historyManager.js'
 import { initErrorDialog }                 from './ui/errorDialog.js'
-import { initAboutScreen }                 from './ui/aboutScreen.js'
+import { initAboutScreen, showAbout }      from './ui/aboutScreen.js'
+import { initUpdateBanner, checkForUpdatesManually } from './ui/updateBanner.js'
 import { drawBarMirror }   from './visualizer/modes/barMirror.js'
 import { drawLineSmooth }  from './visualizer/modes/lineSmooth.js'
 import { drawLineFill }    from './visualizer/modes/lineFill.js'
@@ -34,15 +37,22 @@ window.appState = appState   // expose for non-module script interop if needed
 let _projectFilePath = null   // path of the currently open .spx file
 let _isDirty         = false  // true when state has changed since last save/load
 
-// ─── Auto-load last-used settings (global "last session", not per-project) ───
+// ─── Auto-load last-used project/settings on launch ──────────────────────────
 // State only, applied here before anything below reads visualizerState/exportSettings.
-// The matching DOM sync (_syncDomFromState / backgroundRenderer.reloadFromState) runs
-// at the very end of this module instead of here, since it depends on module-level
-// `let` bindings (e.g. _detectedGpu) declared further down that aren't initialized yet
-// at this point in top-level evaluation. First launch (no last-session.json) leaves
-// visualizerState/exportSettings at their hardcoded defaults, unchanged.
+// The matching DOM sync (_syncDomFromState / backgroundRenderer.reloadFromState /
+// audio reload) runs at the very end of this module instead of here, since it
+// depends on module-level `let` bindings (e.g. _detectedGpu) declared further down
+// that aren't initialized yet at this point in top-level evaluation. First launch
+// (no last-session.json) leaves visualizerState/exportSettings at their hardcoded
+// defaults, unchanged. `projectFilePath` (if present) restores which project this
+// state belongs to — so relaunching genuinely reopens the last saved/imported/
+// opened project, not just its bare settings values with no project identity.
 const _lastSession = await window.api.loadLastSession()
-if (_lastSession) await deserializeState(_lastSession)
+let _lastSessionAudioPath = null
+if (_lastSession) {
+  _lastSessionAudioPath = (await deserializeState(_lastSession)).audioPath
+  if (_lastSession.projectFilePath) _projectFilePath = _lastSession.projectFilePath
+}
 
 // ─── DOM refs ────────────────────────────────────────────────────────────────
 const dropZone     = document.getElementById('canvas-drop-zone')
@@ -398,8 +408,7 @@ dropZone.addEventListener('drop', async e => {
   }
 
   const arrayBuffer = await file.arrayBuffer()
-  // Electron exposes file.path for dropped files
-  await loadAudio(arrayBuffer, file.path || file.name)
+  await loadAudio(arrayBuffer, window.api.getPathForFile(file) || file.name)
 })
 
 // ─── File picker (button + Ctrl+O) ───────────────────────────────────────────
@@ -420,6 +429,7 @@ document.addEventListener('keydown', e => {
   const ctrl = e.ctrlKey || e.metaKey
 
   if (ctrl && e.key === 'n') { e.preventDefault(); _newSession() }
+  if (ctrl && e.shiftKey && e.key.toLowerCase() === 'r') { e.preventDefault(); _resetToDefaults() }
   if (ctrl && e.key === 'o') { e.preventDefault(); _openFilePicker() }
   if (ctrl && e.key === 's') { e.preventDefault(); _saveProject() }
   if (ctrl && e.key === 'e') { e.preventDefault(); if (appState.loaded) { _pauseForExport(); startExport() } }
@@ -471,6 +481,12 @@ function _applyPanelWidths() {
 // clientWidth still reports the pre-transition size if read synchronously.
 appLayout?.addEventListener('transitionend', e => {
   if (e.propertyName === 'grid-template-columns') canvasEngine.refitPreview()
+})
+
+// Same reasoning as above — collapsing the top menu bar (Feature I) frees up
+// vertical space the canvas area can grow into.
+document.getElementById('app-menu-bar')?.addEventListener('transitionend', e => {
+  if (e.propertyName === 'height') canvasEngine.refitPreview()
 })
 
 toggleLeftPanel?.addEventListener('click', () => {
@@ -538,10 +554,14 @@ function _snapshotVS() { return historyManager.snapshot(visualizerState) }
 function _applySnapshot(snap) {
   Object.assign(visualizerState, {
     mode: snap.mode, color: snap.color, opacity: snap.opacity, glow: snap.glow,
-    barWidth: snap.barWidth, barGap: snap.barGap, lineWidth: snap.lineWidth,
+    barWidth: snap.barWidth, barGap: snap.barGap, numBars: snap.numBars, mirrorLR: snap.mirrorLR,
+    mirrorPeakCenter: snap.mirrorPeakCenter, lineWidth: snap.lineWidth,
     padding: snap.padding, smoothing: snap.smoothing,
     sensitivity: snap.sensitivity ?? 1.0,
     centerVertically: snap.centerVertically, yOffset: snap.yOffset,
+    channelMode: snap.channelMode, stereoLayout: snap.stereoLayout,
+    independentChannelColors: snap.independentChannelColors,
+    colorL: snap.colorL, colorR: snap.colorR,
   })
   Object.assign(visualizerState.background, snap.background)
   visualizerState.background.imageEl = null
@@ -587,13 +607,14 @@ function _clearDirty() {
 }
 
 // ─── Auto-save last-used settings (debounced, global "last session") ─────────
-// Independent of the .spx dirty/history tracking above — this persists a global
-// device-level snapshot on every settings change, not the user's explicit project file.
+// Persists a device-level snapshot on every settings change — includes whatever
+// project (if any) is currently open via _currentLastSessionPayload(), so a
+// relaunch restores that project's identity too, not just bare setting values.
 let _autoSaveTimer = null
 function _scheduleAutoSaveLastSession() {
   clearTimeout(_autoSaveTimer)
   _autoSaveTimer = setTimeout(() => {
-    window.api.saveLastSession(serializeState())
+    window.api.saveLastSession(_currentLastSessionPayload())
   }, 800)
 }
 
@@ -615,6 +636,7 @@ function _syncDomFromState(vs, es) {
     btn.classList.toggle('active', btn.dataset.mode === vs.mode)
   })
   canvasEngine.setMode(vs.mode)
+  updateBarWidthVisibility(vs.mode)
 
   // Waveform color + hex
   set('waveform-color', vs.color)
@@ -626,6 +648,19 @@ function _syncDomFromState(vs, es) {
   set('waveform-glow', vs.glow); txt('waveform-glow-val', `${vs.glow}%`)
   set('bar-width', vs.barWidth); txt('bar-width-val', `${vs.barWidth}px`)
   set('bar-gap', vs.barGap); txt('bar-gap-val', `${vs.barGap}px`)
+  set('bar-count', vs.numBars); txt('bar-count-val', `${vs.numBars}`)
+  chk('mirror-lr', vs.mirrorLR)
+  chk('mirror-peak-center', vs.mirrorPeakCenter)
+  $('mirror-peak-center-group')?.classList.toggle('hidden', !vs.mirrorLR)
+
+  // Channel Mode (Stereo)
+  document.querySelectorAll('[name="channel-mode"]').forEach(r => { r.checked = r.value === vs.channelMode })
+  $('stereo-controls')?.classList.toggle('hidden', vs.channelMode !== 'stereo')
+  set('stereo-layout', vs.stereoLayout)
+  chk('independent-channel-colors', vs.independentChannelColors)
+  $('channel-color-controls')?.classList.toggle('hidden', !vs.independentChannelColors)
+  set('waveform-color-l', vs.colorL)
+  set('waveform-color-r', vs.colorR)
   set('line-width', vs.lineWidth); txt('line-width-val', `${vs.lineWidth}px`)
   set('canvas-padding', vs.padding); txt('canvas-padding-val', `${vs.padding}px`)
   set('smoothing', vs.smoothing); txt('smoothing-val', `${vs.smoothing}%`)
@@ -716,6 +751,9 @@ async function _saveProject() {
   if (!savedPath) return   // user cancelled
   _projectFilePath = savedPath
   _clearDirty()
+  _updateTitleBar()
+  window.api.recordRecentProject?.(savedPath)
+  window.api.saveLastSession(_currentLastSessionPayload())
   const hint = document.getElementById('project-hint')
   if (hint) { hint.textContent = 'Saved ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
 }
@@ -734,6 +772,34 @@ async function _exportProject() {
   if (hint) { hint.textContent = 'Exported ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
 }
 
+// ─── Audio: reload from an explicit path (project restore, of any kind) ──────
+// Shared by _applyProjectData() and the last-session startup restore below —
+// both need the exact same "read the file, decode it, or show a not-found
+// hint" behavior for a project's referenced audio file.
+async function _reloadAudioFromPath(audioPath) {
+  if (!audioPath) return
+  const audioResult = await window.api.loadAudioPath(audioPath)
+  if (audioResult?.error) {
+    const hint = document.getElementById('project-hint')
+    if (hint) hint.textContent = `Audio not found: ${audioPath.replace(/.*[\\/]/, '')}`
+  } else if (audioResult) {
+    const u8 = audioResult.buffer instanceof Uint8Array
+      ? audioResult.buffer
+      : new Uint8Array(Object.values(audioResult.buffer))
+    const ab = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength)
+    await loadAudio(ab, audioResult.filePath)
+  }
+}
+
+// ─── Last-session persistence (Ctrl-independent auto-save, restore on launch) ─
+// Includes projectFilePath alongside serializeState()'s own fields — kept as a
+// sibling field, not part of serializeState() itself, since a project FILE
+// should never embed a self-referential path (the file could be moved/renamed
+// and that stale path would then be wrong for anyone else opening it).
+function _currentLastSessionPayload() {
+  return { ...serializeState(appState.filePath || ''), projectFilePath: _projectFilePath }
+}
+
 // ─── Project: shared "apply loaded/imported .spx data" logic ──────────────────
 // Used by both _loadProject() (legacy manual load) and _importProject() (task-9,
 // portable v2.0 support) — deserializeState() already transparently branches on
@@ -742,7 +808,7 @@ async function _exportProject() {
 // `data.audioPath` is always '' (the real audio lives in `data.audioAsset`) — only
 // deserializeState()'s returned `audioPath` (resolved to a temp file) is usable. For a
 // legacy v1.0 file this ordering is a no-op change (deserializeState doesn't touch audio).
-async function _applyProjectData(projectPath, data) {
+async function _applyProjectData(projectPath, data, { recordRecent = true } = {}) {
   // Start from a clean slate first — otherwise a field missing from `data` (e.g. an
   // older-schema project file) would silently inherit whatever was live in memory from
   // the previous session instead of falling back to a proper default, and any
@@ -753,20 +819,7 @@ async function _applyProjectData(projectPath, data) {
   resetExportSettingsToDefaults()
 
   const { audioPath } = await deserializeState(data)
-
-  if (audioPath) {
-    const audioResult = await window.api.loadAudioPath(audioPath)
-    if (audioResult?.error) {
-      const hint = document.getElementById('project-hint')
-      if (hint) hint.textContent = `Audio not found: ${audioPath.replace(/.*[\\/]/, '')}`
-    } else if (audioResult) {
-      const u8 = audioResult.buffer instanceof Uint8Array
-        ? audioResult.buffer
-        : new Uint8Array(Object.values(audioResult.buffer))
-      const ab = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength)
-      await loadAudio(ab, audioResult.filePath)
-    }
-  }
+  await _reloadAudioFromPath(audioPath)
 
   // Sync all DOM controls to the restored state
   _syncDomFromState(visualizerState, exportSettings)
@@ -776,6 +829,17 @@ async function _applyProjectData(projectPath, data) {
 
   _projectFilePath = projectPath
   _clearDirty()
+  _updateTitleBar()
+
+  // Persist immediately (not the debounced settings-change path) so quitting
+  // right after opening a project — before touching any control — still
+  // restores this exact project on next launch, not a stale earlier session.
+  window.api.saveLastSession(_currentLastSessionPayload())
+
+  // Recent-projects list (Feature H) — Load and OS-triggered open both funnel
+  // through here; Import explicitly opts out (see _importProject()), since a
+  // portable-share import is often a one-off, not an ongoing project.
+  if (recordRecent) window.api.recordRecentProject?.(projectPath)
 }
 
 // ─── Project: load ────────────────────────────────────────────────────────────
@@ -787,6 +851,22 @@ async function _loadProject() {
   if (hint) { hint.textContent = 'Project loaded ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
 }
 
+// ─── Project: open from an OS-triggered file (double-click, "Open with", or a
+// second launch attempt while SPulse is already running — see main.js) ────────
+// Same underlying restore path as _loadProject()/_importProject(): deserializeState()
+// transparently handles both legacy v1.0 and portable v2.0 files. Unlike those two
+// (user-initiated via a dialog they just confirmed), this can arrive at any time, so
+// it checks for unsaved changes first — same confirm() pattern as _newSession().
+async function _openProjectFile({ filePath, data }) {
+  if (_isDirty) {
+    const name = filePath.replace(/.*[\\/]/, '')
+    if (!confirm(`Discard unsaved changes and open "${name}"?`)) return
+  }
+  await _applyProjectData(filePath, data)
+  const hint = document.getElementById('project-hint')
+  if (hint) { hint.textContent = 'Project opened ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
+}
+
 // ─── Project: import (portable — see Feature C, base64-embedded assets) ───────
 // Same underlying restore path as _loadProject(): deserializeState() transparently
 // handles both legacy v1.0 and portable v2.0 files, so this differs from Load only in
@@ -795,7 +875,7 @@ async function _loadProject() {
 async function _importProject() {
   const result = await window.api.importProject()
   if (!result) return   // user cancelled
-  await _applyProjectData(result.filePath, result.data)
+  await _applyProjectData(result.filePath, result.data, { recordRecent: false })
   const hint = document.getElementById('project-hint')
   if (hint) { hint.textContent = 'Project imported ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
 }
@@ -808,7 +888,7 @@ function _resetToDefaults() {
   resetExportSettingsToDefaults()
   _syncDomFromState(visualizerState, exportSettings)
   clearTimeout(_autoSaveTimer)
-  window.api.saveLastSession(serializeState())
+  window.api.saveLastSession(_currentLastSessionPayload())
   _setDirty()
   const hint = document.getElementById('project-hint')
   if (hint) { hint.textContent = 'Reset to default ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
@@ -823,15 +903,18 @@ function _newSession() {
   _unloadAudio()
   _resetAudioUI()
 
+  // Clear undo/redo history and the open-project association BEFORE resetting —
+  // _resetToDefaults() immediately persists last-session.json, and it must see
+  // _projectFilePath already cleared, not the just-abandoned project's path.
+  historyManager.clear()
+  _projectFilePath = null
+
   // Reset visualizer/export settings to defaults — reuses the existing Reset to
   // Default flow (including its immediate last-session.json overwrite).
   _resetToDefaults()
 
-  // Clear undo/redo history and the open-project association — this session isn't
-  // "attached" to any project file or prior edit history anymore.
-  historyManager.clear()
-  _projectFilePath = null
   _clearDirty()
+  _updateTitleBar()
   const hint = document.getElementById('project-hint')
   if (hint) hint.textContent = 'New session ✓'
 }
@@ -997,13 +1080,32 @@ initPanelTabs(document.getElementById('right-panel'))
 
 // ─── Wire app menu → renderer actions ────────────────────────────────────────
 window.api.onMenuNewSession?.(_newSession)
+window.api.onMenuResetSettings?.(_resetToDefaults)
 window.api.onMenuOpenAudio?.(_openFilePicker)
 window.api.onMenuSaveProject?.(_saveProject)
 window.api.onMenuLoadProject?.(_loadProject)
 window.api.onMenuExportProject?.(_exportProject)
 window.api.onMenuImportProject?.(_importProject)
+window.api.onOpenProjectFile?.(_openProjectFile)
 window.api.onMenuUndo?.(_undo)
 window.api.onMenuRedo?.(_redo)
+
+// ─── Custom in-app menu bar (Windows/Linux only) ─────────────────────────────
+initMenuBar({
+  newSession:             _newSession,
+  resetSettings:          _resetToDefaults,
+  openFilePicker:         _openFilePicker,
+  saveProject:            _saveProject,
+  loadProject:            _loadProject,
+  exportProject:          _exportProject,
+  importProject:          _importProject,
+  quit:                   () => window.api.quit(),
+  undo:                   _undo,
+  redo:                   _redo,
+  showAbout:              showAbout,
+  checkForUpdatesManually: checkForUpdatesManually,
+  openProjectFile:        _openProjectFile,
+})
 
 // ─── Init UI components ───────────────────────────────────────────────────────
 initErrorDialog()
@@ -1015,102 +1117,19 @@ window.api.detectGpuEncoders?.().then(info => {
 })
 
 // ─── Auto-update banner ───────────────────────────────────────────────────────
-;(function _initUpdateBanner() {
-  const bar         = document.getElementById('update-bar')
-  const msgEl       = document.getElementById('update-msg')
-  const progressWrap= document.getElementById('update-progress-wrap')
-  const progressFill= document.getElementById('update-progress-fill')
-  const btnUpdateNow= document.getElementById('btn-update-now')
-  const btnInstall  = document.getElementById('btn-update-install')
-  const btnDismiss  = document.getElementById('btn-update-dismiss')
-  if (!bar) return
+initUpdateBanner()
 
-  const DISMISSED_KEY = 'spulse-dismissed-update-version'
-  // Set while a banner is showing an available-but-not-yet-downloading update —
-  // dismissing in that state remembers the version so it doesn't nag again.
-  let _pendingVersion = null
-  // A manual "Check for Updates…" click always shows the result, even for a
-  // version the user previously dismissed on auto-check.
-  let _manualCheck = false
-
-  function _show(msg) {
-    msgEl.textContent = msg
-    bar.classList.remove('hidden')
-  }
-
-  btnDismiss.addEventListener('click', () => {
-    if (_pendingVersion) {
-      localStorage.setItem(DISMISSED_KEY, _pendingVersion)
-      _pendingVersion = null
-    }
-    bar.classList.add('hidden')
-  })
-
-  btnUpdateNow.addEventListener('click', () => {
-    _pendingVersion = null
-    btnUpdateNow.classList.add('hidden')
-    progressWrap.classList.remove('hidden')
-    msgEl.textContent = 'Mengunduh update… 0%'
-    window.api.downloadUpdate?.()
-  })
-
-  btnInstall.addEventListener('click', () => window.api.installUpdate?.())
-
-  let _dismissTimer = null
-  function _autoDismiss(ms = 3000) {
-    clearTimeout(_dismissTimer)
-    _dismissTimer = setTimeout(() => bar.classList.add('hidden'), ms)
-  }
-
-  window.api.onUpdateNotAvailable?.(() => {
-    _manualCheck = false
-    progressWrap.classList.add('hidden')
-    btnUpdateNow.classList.add('hidden')
-    btnInstall.classList.add('hidden')
-    _show('Sudah versi terbaru')
-    _autoDismiss(3000)
-  })
-
-  window.api.onUpdateAvailable?.(({ version }) => {
-    clearTimeout(_dismissTimer)
-    if (!_manualCheck && localStorage.getItem(DISMISSED_KEY) === version) return
-    _manualCheck = false
-
-    _pendingVersion = version
-    _show(`Versi ${version} tersedia`)
-    progressWrap.classList.add('hidden')
-    btnInstall.classList.add('hidden')
-    btnUpdateNow.classList.remove('hidden')
-  })
-
-  window.api.onUpdateProgress?.(({ percent }) => {
-    progressFill.style.width = `${percent}%`
-    msgEl.textContent = `Mengunduh update… ${percent}%`
-  })
-
-  window.api.onUpdateDownloaded?.(({ version }) => {
-    progressWrap.classList.add('hidden')
-    btnUpdateNow.classList.add('hidden')
-    btnInstall.classList.remove('hidden')
-    _show(`Update ${version} siap diinstall`)
-  })
-
-  window.api.onMenuCheckUpdates?.(() => {
-    _pendingVersion = null
-    _manualCheck = true
-    _show('Memeriksa update…')
-    bar.classList.remove('hidden')
-    progressWrap.classList.add('hidden')
-    btnUpdateNow.classList.add('hidden')
-    btnInstall.classList.add('hidden')
-    window.api.checkForUpdates?.()
-  })
-}())
-
-// ─── Sync DOM + background assets to the auto-loaded session (if any) ────────
+// ─── Sync DOM + reload audio/background for the auto-loaded session (if any) ─
 // Runs last, after every control-wiring call above and after all module-level
 // `let`/`const` bindings are initialized (see the auto-load block near the top).
 if (_lastSession) {
   _syncDomFromState(visualizerState, exportSettings)
   backgroundRenderer.reloadFromState(visualizerState.background)
+  // loadAudio() (inside _reloadAudioFromPath) unconditionally marks state dirty —
+  // correct when the user opens new audio, wrong here since we're restoring
+  // exactly what was already saved. _clearDirty() after, matching how
+  // _applyProjectData() ends every one of its own restore paths the same way.
+  await _reloadAudioFromPath(_lastSessionAudioPath)
+  _clearDirty()
+  _updateTitleBar()
 }

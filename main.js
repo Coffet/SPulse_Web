@@ -19,7 +19,56 @@ if (process.platform === 'linux') {
   app.commandLine.appendSwitch('no-sandbox')
 }
 
+// Only one running instance at a time — launching a second copy (double-click,
+// running `npm start` again, etc.) just focuses the existing window instead of
+// spawning a duplicate process that would fight over the same audio/export state.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+  return
+}
+
 let _mainWin = null
+
+// ─── Open a project file (double-click, "Open with", or already-running relaunch) ─
+// .spulse/.spx paths reach us three ways: a CLI arg on cold launch (Windows/Linux),
+// the `second-instance` event's commandLine array (already running, Windows/Linux),
+// or the `open-file` event (macOS — can fire before or after app is ready).
+function _findProjectFileArg(argv) {
+  return argv.find(a => /\.(spulse|spx)$/i.test(a)) || null
+}
+
+function _openProjectFileIfValid(filePath) {
+  if (!_mainWin) return
+  try {
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+    _mainWin.webContents.send('open-project-file', { filePath, data })
+  } catch (err) {
+    dialog.showErrorBox('Could Not Open Project', `Failed to open "${filePath}":\n${err.message}`)
+  }
+}
+
+// Buffered until the window exists and has finished loading — covers both a cold
+// launch (found on the very first argv scan below) and `open-file` firing before
+// `whenReady()` resolves.
+let _pendingProjectFilePath = _findProjectFileArg(process.argv)
+
+app.on('open-file', (event, filePath) => {
+  event.preventDefault()
+  if (_mainWin) {
+    _openProjectFileIfValid(filePath)
+  } else {
+    _pendingProjectFilePath = filePath
+  }
+})
+
+app.on('second-instance', (event, commandLine) => {
+  if (!_mainWin) return
+  if (_mainWin.isMinimized()) _mainWin.restore()
+  _mainWin.focus()
+
+  const filePath = _findProjectFileArg(commandLine)
+  if (filePath) _openProjectFileIfValid(filePath)
+})
 
 // ─── Auto-updater ─────────────────────────────────────────────────────────────
 function _initAutoUpdater() {
@@ -73,6 +122,13 @@ function createWindow() {
   })
 
   _mainWin.loadFile('src/index.html')
+
+  _mainWin.webContents.once('did-finish-load', () => {
+    if (_pendingProjectFilePath) {
+      _openProjectFileIfValid(_pendingProjectFilePath)
+      _pendingProjectFilePath = null
+    }
+  })
 }
 
 function createMenu() {
@@ -83,6 +139,7 @@ function createMenu() {
       label: 'File',
       submenu: [
         { label: 'New Session', accelerator: 'CmdOrCtrl+N', click: () => _mainWin?.webContents.send('menu-new-session') },
+        { label: 'Reset Settings (Keep Audio)', accelerator: 'CmdOrCtrl+Shift+R', click: () => _mainWin?.webContents.send('menu-reset-settings') },
         { type: 'separator' },
         { label: 'Open Audio…', accelerator: 'CmdOrCtrl+O', click: () => _mainWin?.webContents.send('menu-open-audio') },
         { label: 'Save Project', accelerator: 'CmdOrCtrl+S', click: () => _mainWin?.webContents.send('menu-save-project') },
@@ -110,7 +167,10 @@ function createMenu() {
       ]
     }
   ]
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+  // Windows/Linux get the new in-app menu bar (src/controls/menuBar.js) instead
+  // — every action it covers already has a working in-app equivalent (Feature
+  // I). macOS keeps the native top-of-screen menu, per platform convention.
+  Menu.setApplicationMenu(isMac ? Menu.buildFromTemplate(template) : null)
 }
 
 app.whenReady().then(() => {
@@ -233,6 +293,54 @@ ipcMain.handle('load-last-session', () => {
   const filePath = path.join(app.getPath('userData'), 'last-session.json')
   if (!fs.existsSync(filePath)) return null
   return JSON.parse(fs.readFileSync(filePath, 'utf8'))
+})
+
+// ─── Recent projects (MRU list, separate from last-session.json since the two
+// have different lifecycles — one entry always-overwritten vs. an
+// append/evict list) ──────────────────────────────────────────────────────
+const RECENT_PROJECTS_LIMIT = 10
+
+function _recentProjectsPath() {
+  return path.join(app.getPath('userData'), 'recent-projects.json')
+}
+
+function _readRecentProjects() {
+  try {
+    const filePath = _recentProjectsPath()
+    if (!fs.existsSync(filePath)) return []
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function _writeRecentProjects(list) {
+  fs.writeFileSync(_recentProjectsPath(), JSON.stringify(list, null, 2), 'utf8')
+}
+
+ipcMain.handle('record-recent-project', (event, filePath) => {
+  const list = _readRecentProjects().filter(entry => entry.filePath !== filePath)
+  list.unshift({ filePath, name: path.basename(filePath), openedAt: Date.now() })
+  _writeRecentProjects(list.slice(0, RECENT_PROJECTS_LIMIT))
+})
+
+ipcMain.handle('load-recent-projects', () => _readRecentProjects())
+
+ipcMain.handle('remove-recent-project', (event, filePath) => {
+  _writeRecentProjects(_readRecentProjects().filter(entry => entry.filePath !== filePath))
+})
+
+ipcMain.handle('clear-recent-projects', () => _writeRecentProjects([]))
+
+// ─── Load a project from an explicit path (recent-projects click — no dialog) ─
+ipcMain.handle('load-project-from-path', (event, filePath) => {
+  try {
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+    return { filePath, data }
+  } catch (err) {
+    return { error: err.message }
+  }
 })
 
 // ─── Load audio by explicit path (used by project load — no dialog) ──────────

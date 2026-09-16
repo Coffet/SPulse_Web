@@ -1,9 +1,17 @@
-const { contextBridge, ipcRenderer } = require('electron')
+const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 contextBridge.exposeInMainWorld('api', {
+  // Platform (static value, no IPC round-trip) — lets the renderer decide
+  // whether to show the custom in-app menu bar (Windows/Linux) or defer to
+  // the native OS menu (macOS).
+  platform: process.platform,
+
   // Audio
   openAudioFile: () =>
     ipcRenderer.invoke('open-audio-file'),
+  // Replaces the removed `File.path` (Electron 32+) for drag-and-dropped files.
+  getPathForFile: (file) =>
+    webUtils.getPathForFile(file),
   loadAudioPath: (filePath) =>
     ipcRenderer.invoke('load-audio-path', filePath),
   readFileAsBase64: (filePath) =>
@@ -55,6 +63,18 @@ contextBridge.exposeInMainWorld('api', {
   loadLastSession: () =>
     ipcRenderer.invoke('load-last-session'),
 
+  // Recent projects (MRU list)
+  recordRecentProject: (filePath) =>
+    ipcRenderer.invoke('record-recent-project', filePath),
+  loadRecentProjects: () =>
+    ipcRenderer.invoke('load-recent-projects'),
+  removeRecentProject: (filePath) =>
+    ipcRenderer.invoke('remove-recent-project', filePath),
+  clearRecentProjects: () =>
+    ipcRenderer.invoke('clear-recent-projects'),
+  loadProjectFromPath: (filePath) =>
+    ipcRenderer.invoke('load-project-from-path', filePath),
+
   // Main → Renderer events (export progress)
   onExportProgress: (cb) =>
     ipcRenderer.on('export-progress', (event, data) => cb(data)),
@@ -72,10 +92,12 @@ contextBridge.exposeInMainWorld('api', {
   onShowAbout:       (cb) => ipcRenderer.on('show-about',          () => cb()),
   onMenuOpenAudio:   (cb) => ipcRenderer.on('menu-open-audio',     () => cb()),
   onMenuNewSession: (cb) => ipcRenderer.on('menu-new-session',     () => cb()),
+  onMenuResetSettings: (cb) => ipcRenderer.on('menu-reset-settings', () => cb()),
   onMenuSaveProject: (cb) => ipcRenderer.on('menu-save-project',   () => cb()),
   onMenuLoadProject: (cb) => ipcRenderer.on('menu-load-project',   () => cb()),
   onMenuExportProject: (cb) => ipcRenderer.on('menu-export-project', () => cb()),
   onMenuImportProject: (cb) => ipcRenderer.on('menu-import-project', () => cb()),
+  onOpenProjectFile: (cb) => ipcRenderer.on('open-project-file', (_, d) => cb(d)),
   onMenuUndo:        (cb) => ipcRenderer.on('menu-undo',           () => cb()),
   onMenuRedo:        (cb) => ipcRenderer.on('menu-redo',           () => cb()),
   onMenuCheckUpdates:(cb) => ipcRenderer.on('menu-check-updates',  () => cb()),
