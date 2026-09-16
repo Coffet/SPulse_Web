@@ -5,15 +5,33 @@
 [![Downloads](https://img.shields.io/github/downloads/senriki/SPulse/total?style=flat-square&logo=github)](https://github.com/senriki/SPulse/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/senriki/SPulse/ci.yml?branch=main&label=CI&style=flat-square&logo=githubactions)](https://github.com/senriki/SPulse/actions/workflows/ci.yml)
 
-Desktop app for creating MP4 waveform visualizer videos from audio files. A web companion (same UI) can preview, export WebM, and download a portable `.spulse` project for the desktop app. The desktop app runs fully offline.
+SPulse is a waveform visualizer you can run in the **browser** or as a **desktop** app. Same editor, same styles — no accounts, no database.
+
+- **Web** — Node/Express serves the static UI. Design, export **WebM** (MediaRecorder, up to 1080p / 30fps, real time), and download a portable `.spulse` project. Refreshing the tab discards the session unless you saved that file.
+- **Desktop** — Electron + bundled FFmpeg. Offline **MP4** export (up to 4K / 60fps, GPU encoders), last-session restore, recent files, and auto-update.
 
 ![SPulse preview](docs/assets/img/preview.png)
 
-Built with Electron, Web Audio API, Canvas 2D, and FFmpeg. The web host is a small Node/Express static server — no accounts or database.
+Built with vanilla JS, Web Audio API, Canvas 2D, Express (web host), and Electron + FFmpeg (desktop).
 
 ---
 
-## Download
+## Use in the browser
+
+```bash
+npm install
+npm run start:web
+```
+
+Open **http://localhost:3000**. Pick **New project** or **Import project** (`.spulse` / `.spx`), then load audio and design as usual.
+
+The server only hosts files from `src/`. Encoding happens in the visitor’s browser. There is no upload API and no login.
+
+To keep work, use **Export Project** / Ctrl+S for a `.spulse` file. Open that file in the desktop app if you need MP4.
+
+---
+
+## Download (desktop)
 
 | Platform | Link |
 |---|---|
@@ -30,26 +48,33 @@ Links always point to the latest stable release. Looking for a portable Windows 
 
 ## Requirements
 
+**Web**
+
 - Node.js 22.12+
 - npm 10+
+- A current Chromium-based browser (Chrome / Edge) recommended for MediaRecorder export
+
+**Desktop**
+
+- Same Node/npm for building from source
 - A display (Windows or macOS host; WSL2 headless is not supported)
 
 ## Getting Started
 
 ```bash
 npm install
+npm run start:web  # web app at http://localhost:3000
 npm start          # Electron desktop
-npm run start:web  # browser at http://localhost:3000
 ```
 
-On Linux/macOS/WSL, `make run` works the same way if you have Make installed.
+On Linux/macOS/WSL, `make run-web` / `make run` work the same way if you have Make installed.
 
 ## Commands
 
 | npm script | `make` equivalent (Unix only) | Description |
 |---|---|---|
-| `npm start` | `make run` | Start the Electron app in development mode |
-| `npm run start:web` | `make run-web` | Serve the web companion at http://localhost:3000 |
+| `npm run start:web` | `make run-web` | Start the web app at http://localhost:3000 |
+| `npm start` | `make run` | Start the Electron desktop app |
 | `npm install` | `make install` | Install dependencies |
 | `npm run build` | `make build` | Package for the current platform |
 | `npm run build:win` | `make build-win` | Build Windows installer (.exe via NSIS) |
@@ -72,11 +97,12 @@ Output is written to `dist/`.
 - **Drag to reposition**: click and drag the visualizer directly on the canvas to adjust its vertical position — syncs with the Y Offset slider in the panel
 - **Backgrounds**: solid color, linear gradient, static image (with blur/darken), looping video — thumbnail preview appears in the panel immediately after selecting a file
 - **Text overlay**: title + artist, 5 positions, custom XY, font/size/color/opacity
-- **Export**: Desktop — MP4 via FFmpeg (Full HD, 4K, Shorts/Reels, Square, custom; 24/30/60 fps; H.264/H.265; NVENC/AMF/QSV). Web — WebM via MediaRecorder, capped at 1080p / 30fps, recorded in real time
-- **Web companion**: `npm run start:web` — same editor in the browser, no accounts. Refresh discards the session unless you download a `.spulse` project (open that file in the desktop app for MP4)
-- **Project save/load**: `.spx` on this device (desktop); portable `.spulse` with embedded audio for sharing or web ↔ desktop
+- **Export (web)**: WebM via MediaRecorder, capped at 1080p / 30fps, recorded in real time in the browser
+- **Export (desktop)**: MP4 via FFmpeg (Full HD, 4K, Shorts/Reels, Square, custom; 24/30/60 fps; H.264/H.265; NVENC/AMF/QSV)
+- **Landing (web)**: first screen offers New project or Import project; desktop skips this and opens the studio
+- **Projects**: portable `.spulse` (embedded audio, works web ↔ desktop); desktop can also save `.spx` on this device
 - **Undo/redo**: 20-step history for visualizer style changes (Ctrl+Z / Ctrl+Y)
-- **Auto-update**: checks GitHub Releases on startup and downloads updates in the background; a banner appears when a new version is ready to install
+- **Desktop extras**: last-session restore, recent files, auto-update from GitHub Releases
 
 ## Keyboard Shortcuts
 
@@ -85,10 +111,10 @@ Output is written to `dist/`.
 | `Ctrl+O` | Open audio file |
 | `Space` | Play / Pause |
 | `Ctrl+E` | Start export |
-| `Ctrl+S` | Save project |
+| `Ctrl+S` | Save / download project (`.spulse` on web) |
 | `Ctrl+Z` | Undo |
 | `Ctrl+Y` | Redo |
-| `Ctrl+Q` | Quit |
+| `Ctrl+Q` | Quit (desktop) |
 | `Escape` | Close modal |
 
 ---

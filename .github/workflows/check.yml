@@ -26,6 +26,7 @@ jobs:
         run: |
           node --check main.js
           node --check preload.js
+          node --check server.js
           node --check src/export/ffmpegPath.js
           node --check src/export/gpuDetect.js
           node --check src/export/frameWriter.js
