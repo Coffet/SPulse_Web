@@ -61,6 +61,14 @@ app.use((_req, res) => {
   res.sendFile(path.join(SRC, 'index.html'))
 })
 
-app.listen(PORT, () => {
+app.listen(PORT, (err) => {
+  if (err) {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use. Stop the other Node process, then start again.`)
+    } else {
+      console.error(err)
+    }
+    process.exit(1)
+  }
   console.log(`SPulse web  http://localhost:${PORT}  (v${pkg.version})`)
 })

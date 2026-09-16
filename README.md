@@ -31,7 +31,23 @@ npm install
 npm run start:web
 ```
 
-Open **[http://localhost:3000](http://localhost:3000)**. Pick **New project** or **Import project** (`.spulse` / `.spx`), then load audio and design as usual.
+That runs `node server.js` and should stay in the foreground:
+
+```
+SPulse web  http://localhost:3000  (v1.4.0)
+```
+
+Leave that terminal open. Open **[http://localhost:3000](http://localhost:3000)**. Pick **New project** or **Import project** (`.spulse` / `.spx`), then load audio and design as usual.
+
+**Stop the server** with **Ctrl+C** in that same terminal. There is no `npm stop`. If the `PS>` / `$` prompt comes back right after the URL, the process already exited (usually port 3000 is taken) — Ctrl+C will not help. On Windows, find and kill the leftover process, then start again:
+
+```powershell
+netstat -ano | findstr :3000
+taskkill /PID <pid> /F
+npm run start:web
+```
+
+`npm start` launches the **Electron desktop** app, not the browser server.
 
 The server only hosts files from `src/` (plus `/api/version` and `/api/upstream` for the update check). Encoding happens in the visitor’s browser. There is no upload API and no login.
 
@@ -74,7 +90,7 @@ Links always point to the latest stable release. Looking for a portable Windows 
 
 ```bash
 npm install
-npm run start:web  # web app at http://localhost:3000
+npm run start:web  # web app at http://localhost:3000 — stop with Ctrl+C
 npm start          # Electron desktop
 ```
 
@@ -84,7 +100,7 @@ On Linux/macOS/WSL, `make run-web` / `make run` work the same way if you have Ma
 
 | npm script                   | `make` equivalent (Unix only) | Description                                                             |
 | ---------------------------- | ----------------------------- | ----------------------------------------------------------------------- |
-| `npm run start:web`          | `make run-web`                | Start the web app at [http://localhost:3000](http://localhost:3000)     |
+| `npm run start:web`          | `make run-web`                | Start the web app at [http://localhost:3000](http://localhost:3000). Stop with Ctrl+C in that terminal. |
 | `npm start`                  | `make run`                    | Start the Electron desktop app                                          |
 | `npm install`                | `make install`                | Install dependencies                                                    |
 | `npm run build`              | `make build`                  | Package for the current platform                                        |
