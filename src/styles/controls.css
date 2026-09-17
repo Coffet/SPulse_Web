@@ -245,8 +245,7 @@
 
 /* Icon-only buttons — pin the glyph in the middle. Leave .style-btn alone. */
 .btn-icon,
-.btn-icon-sm:not(#btn-pick-output),
-.web-session-info {
+.btn-icon-sm:not(#btn-pick-output) {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -256,8 +255,7 @@
 }
 
 .btn-icon svg,
-.btn-icon-sm:not(#btn-pick-output) svg,
-.web-session-info svg {
+.btn-icon-sm:not(#btn-pick-output) svg {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -315,16 +313,6 @@
 #btn-pick-output {
   font-size: 16px;
   line-height: 1;
-}
-
-.web-session-info {
-  font-size: 0;
-  line-height: 0;
-}
-
-.web-session-info svg {
-  width: 15px;
-  height: 15px;
 }
 
 .btn-icon-sm:hover {

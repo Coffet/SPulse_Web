@@ -264,6 +264,20 @@ body.studio-active {
   border-left: 1px solid var(--color-panel-border);
 }
 
+.studio-history .btn-icon-sm svg {
+  width: 16px;
+  height: 16px;
+}
+
+.studio-history .btn-icon-sm:not(:disabled):hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.studio-history .btn-icon-sm:not(:disabled):active {
+  background: var(--color-surface-active);
+}
+
 .studio-topbar-actions > .btn-icon-sm {
   width: 32px;
   height: 32px;
@@ -1374,58 +1388,24 @@ input, textarea, select, [contenteditable] {
   top: 8px;
 }
 
+/* Web session status — plain text in the top bar; display-only */
 .web-session-bar {
-  position: relative;
-  display: flex;
-  align-items: center;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
 }
 
-.web-session-info {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid var(--color-panel-border);
-  border-radius: var(--radius-md);
+.web-session-bar[data-state="unsaved"] {
   color: var(--color-text-secondary);
-  cursor: help;
 }
 
-.web-session-info svg {
-  width: 15px;
-  height: 15px;
-}
-
-.web-session-info:hover,
-.web-session-info:focus-visible {
-  color: var(--color-text-primary);
-  background: var(--color-surface-hover);
-}
-
-.web-session-tip {
-  display: none;
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  width: 16.75rem;
-  padding: 10px 12px;
-  background: var(--color-panel-bg);
-  border: 1px solid var(--color-panel-border);
-  border-radius: var(--radius-md);
-  box-shadow: 0 12px 28px oklch(0.2 0.04 275 / 0.28);
-  color: var(--color-text-secondary);
-  font-size: 12.5px;
-  line-height: 1.45;
-  white-space: normal;
-  z-index: 30;
-}
-
-.web-session-bar:hover .web-session-tip,
-.web-session-bar:focus-within .web-session-tip {
-  display: block;
+.web-session-bar[data-state="saved"],
+.web-session-bar[data-state="imported"],
+.web-session-bar[data-state="opened"] {
+  color: var(--color-accent);
 }
 
 @media (prefers-reduced-motion: reduce) {

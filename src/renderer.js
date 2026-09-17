@@ -40,13 +40,15 @@ ensurePlatformApi()
 
 function _defaultProjectHint() {
   return isWeb()
-    ? 'Refresh discards this session — Ctrl+S downloads a project'
+    ? 'Ctrl+S downloads your project'
     : 'Ctrl+S to save'
 }
 
 // ─── Project state ────────────────────────────────────────────────────────────
 let _projectFilePath = null   // path of the currently open .spx file
 let _isDirty         = false  // true when state has changed since last save/load
+let _webClean        = null   // session fingerprint at last save / import / download
+let _webSessionKind  = null   // web status text: 'imported' | 'opened' | 'saved'
 
 // ─── Auto-load last-used project/settings on launch ──────────────────────────
 // State only, applied here before anything below reads visualizerState/exportSettings.
@@ -94,7 +96,7 @@ const overlayTitle  = document.getElementById('overlay-title')
 const overlayArtist = document.getElementById('overlay-artist')
 
 // ─── Load audio from ArrayBuffer + file path ─────────────────────────────────
-async function loadAudio(arrayBuffer, filePath, displayName) {
+async function loadAudio(arrayBuffer, filePath, displayName, { markDirty = true } = {}) {
   _setDropMessage('⟳ Decoding…', true)
 
   try {
@@ -143,7 +145,10 @@ async function loadAudio(arrayBuffer, filePath, displayName) {
 
     // Notify canvas engine (task-4 listens for this)
     window.dispatchEvent(new CustomEvent('audio-loaded', { detail: appState }))
-    _setDirty()
+    if (markDirty) {
+      _webSessionKind = null
+      _setDirty()
+    }
 
     if (wasPlaying) {
       appState.analyser.play()
@@ -629,7 +634,7 @@ function _undo() {
   const snap = historyManager.undo(_snapshotVS())
   if (!snap) return
   _applySnapshot(snap)
-  _setDirty()
+  _syncDirtyFromHistory()
   _syncHistoryButtons()
 }
 
@@ -637,7 +642,7 @@ function _redo() {
   const snap = historyManager.redo(_snapshotVS())
   if (!snap) return
   _applySnapshot(snap)
-  _setDirty()
+  _syncDirtyFromHistory()
   _syncHistoryButtons()
 }
 
@@ -662,15 +667,84 @@ function _onPanelControlChange() {
 }
 
 // ─── Project: dirty tracking & title bar ─────────────────────────────────────
+function _sessionFingerprint() {
+  return JSON.stringify({
+    vs: _snapshotVS(),
+    audio: appState.filePath || appState.fileName || '',
+  })
+}
+
+function _syncDirtyFromHistory() {
+  if (_webClean && _sessionFingerprint() === _webClean) {
+    _isDirty = false
+  } else {
+    _isDirty = true
+  }
+  _updateTitleBar()
+  _updateWebSessionAlert()
+}
+
+function _updateWebSessionAlert() {
+  const el = document.getElementById('web-session-bar')
+  if (!el) return
+  if (!isWeb() || document.getElementById('studio')?.hidden) {
+    el.classList.add('hidden')
+    el.textContent = ''
+    el.removeAttribute('data-state')
+    return
+  }
+
+  if (_isDirty) {
+    el.classList.remove('hidden')
+    el.dataset.state = 'unsaved'
+    el.textContent = 'Unsaved'
+    return
+  }
+  if (_webSessionKind === 'saved') {
+    el.classList.remove('hidden')
+    el.dataset.state = 'saved'
+    el.textContent = 'Saved'
+    return
+  }
+  if (_webSessionKind === 'imported') {
+    el.classList.remove('hidden')
+    el.dataset.state = 'imported'
+    el.textContent = 'Project imported'
+    return
+  }
+  if (_webSessionKind === 'opened') {
+    el.classList.remove('hidden')
+    el.dataset.state = 'opened'
+    el.textContent = 'Project opened'
+    return
+  }
+  if (appState.loaded) {
+    el.classList.remove('hidden')
+    el.dataset.state = 'unsaved'
+    el.textContent = 'Unsaved'
+    return
+  }
+  el.classList.add('hidden')
+  el.textContent = ''
+  el.removeAttribute('data-state')
+}
+
 function _setDirty() {
   if (_isDirty) return
   _isDirty = true
   _updateTitleBar()
+  _updateWebSessionAlert()
 }
 
-function _clearDirty() {
+function _clearDirty({ exported = false, imported = false, opened = false } = {}) {
   _isDirty = false
+  _webClean = _sessionFingerprint()
+  if (exported)      _webSessionKind = 'saved'
+  else if (imported) _webSessionKind = 'imported'
+  else if (opened)  _webSessionKind = 'opened'
+  else               _webSessionKind = null
   _updateTitleBar()
+  _updateWebSessionAlert()
 }
 
 // ─── Auto-save last-used settings (debounced, global "last session") ─────────
@@ -822,12 +896,12 @@ async function _saveProject() {
     : await window.api.saveProject(data, defaultPath)
   if (!savedPath) return   // user cancelled
   _projectFilePath = savedPath
-  _clearDirty()
+  _clearDirty({ exported: isWeb() })
   _updateTitleBar()
   window.api.recordRecentProject?.(savedPath)
   window.api.saveLastSession(_currentLastSessionPayload())
   const hint = document.getElementById('project-hint')
-  if (hint) { hint.textContent = isWeb() ? 'Project downloaded ✓' : 'Saved ✓'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
+  if (hint) { hint.textContent = isWeb() ? 'Downloaded' : 'Saved'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
 }
 
 // ─── Project: export (portable — see Feature C, base64-embedded assets) ───────
@@ -840,6 +914,7 @@ async function _exportProject() {
   const data      = await serializePortableState(appState.filePath || '')
   const savedPath = await window.api.exportProject(data, defaultPath)
   if (!savedPath) return   // user cancelled
+  if (isWeb()) _clearDirty({ exported: true })
   const hint = document.getElementById('project-hint')
   if (hint) { hint.textContent = 'Exported ✓'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
 }
@@ -859,7 +934,7 @@ async function _reloadAudioFromPath(audioPath) {
       ? audioResult.buffer
       : new Uint8Array(Object.values(audioResult.buffer))
     const ab = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength)
-    await loadAudio(ab, audioResult.filePath, audioResult.fileName)
+    await loadAudio(ab, audioResult.filePath, audioResult.fileName, { markDirty: false })
   }
 }
 
@@ -880,7 +955,7 @@ function _currentLastSessionPayload() {
 // `data.audioPath` is always '' (the real audio lives in `data.audioAsset`) — only
 // deserializeState()'s returned `audioPath` (resolved to a temp file) is usable. For a
 // legacy v1.0 file this ordering is a no-op change (deserializeState doesn't touch audio).
-async function _applyProjectData(projectPath, data, { recordRecent = true } = {}) {
+async function _applyProjectData(projectPath, data, { recordRecent = true, webOpened = false } = {}) {
   // Start from a clean slate first — otherwise a field missing from `data` (e.g. an
   // older-schema project file) would silently inherit whatever was live in memory from
   // the previous session instead of falling back to a proper default, and any
@@ -901,7 +976,9 @@ async function _applyProjectData(projectPath, data, { recordRecent = true } = {}
   backgroundRenderer.reloadFromState(visualizerState.background)
 
   _projectFilePath = projectPath
-  _clearDirty()
+  if (isWeb() && webOpened === 'imported') _clearDirty({ imported: true })
+  else if (isWeb() && webOpened === 'opened') _clearDirty({ opened: true })
+  else _clearDirty()
   _updateTitleBar()
 
   // Persist immediately (not the debounced settings-change path) so quitting
@@ -919,7 +996,7 @@ async function _applyProjectData(projectPath, data, { recordRecent = true } = {}
 async function _loadProject() {
   const result = await window.api.loadProject()
   if (!result) return   // user cancelled
-  await _applyProjectData(result.filePath, result.data)
+  await _applyProjectData(result.filePath, result.data, { webOpened: isWeb() ? 'opened' : false })
   const hint = document.getElementById('project-hint')
   if (hint) { hint.textContent = 'Project loaded ✓'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
 }
@@ -935,7 +1012,7 @@ async function _openProjectFile({ filePath, data }) {
     const name = filePath.replace(/.*[\\/]/, '')
     if (!confirm(`Discard unsaved changes and open "${name}"?`)) return
   }
-  await _applyProjectData(filePath, data)
+  await _applyProjectData(filePath, data, { webOpened: isWeb() ? 'opened' : false })
   const hint = document.getElementById('project-hint')
   if (hint) { hint.textContent = 'Project opened ✓'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
 }
@@ -948,7 +1025,7 @@ async function _openProjectFile({ filePath, data }) {
 async function _importProject() {
   const result = await window.api.importProject()
   if (!result) return false
-  await _applyProjectData(result.filePath, result.data, { recordRecent: false })
+  await _applyProjectData(result.filePath, result.data, { recordRecent: false, webOpened: isWeb() ? 'imported' : false })
   const hint = document.getElementById('project-hint')
   if (hint) { hint.textContent = 'Project imported ✓'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
   return true
@@ -982,6 +1059,8 @@ function _newSession() {
   // _projectFilePath already cleared, not the just-abandoned project's path.
   historyManager.clear()
   _projectFilePath = null
+  _webSessionKind = null
+  _webClean = null
   _syncHistoryButtons()
 
   // Reset visualizer/export settings to defaults — reuses the existing Reset to
@@ -1040,7 +1119,7 @@ function enterStudio() {
   if (studio) studio.hidden = false
   document.body.classList.remove('home-active')
   document.body.classList.add('studio-active')
-  if (isWeb()) document.getElementById('web-session-bar')?.classList.remove('hidden')
+  _updateWebSessionAlert()
   document.getElementById('skip-link')?.setAttribute('href', '#center-panel')
   requestAnimationFrame(() => canvasEngine.refitPreview())
 }
@@ -1063,6 +1142,18 @@ function applyWebChrome() {
   if (hint) hint.textContent = _defaultProjectHint()
   document.getElementById('about-web-note')?.classList.remove('hidden')
   document.getElementById('about-edition')?.classList.remove('hidden')
+  document.getElementById('project-web-caption')?.classList.remove('hidden')
+
+  const menuSave = document.querySelector('[data-action="save-project"]')
+  const menuLoad = document.querySelector('[data-action="load-project"]')
+  if (menuSave) menuSave.textContent = 'Export Project'
+  if (menuLoad) menuLoad.textContent = 'Open Project'
+
+  const btnSave = document.getElementById('btn-save-project')
+  const btnLoad = document.getElementById('btn-load-project')
+  if (btnSave) btnSave.textContent = 'Export'
+  if (btnLoad) btnLoad.textContent = 'Open'
+
   applyWebExportLimitsToDom()
   enterHome()
 }

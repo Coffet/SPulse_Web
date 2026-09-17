@@ -98,14 +98,14 @@
               <button class="menu-action" data-action="new-session">New Session</button>
               <button class="menu-action" data-action="reset-settings">Reset Settings (Keep Audio)</button>
               <div class="menu-separator"></div>
-              <button class="menu-action" data-action="open-audio">Open Audio…</button>
+              <button class="menu-action" data-action="open-audio">Open Audio </button>
               <button class="menu-action" data-action="save-project">Save Project</button>
-              <button class="menu-action" data-action="load-project">Load Project…</button>
+              <button class="menu-action" data-action="load-project">Load Project</button>
               <div class="menu-separator desktop-only" id="menu-recent-separator" hidden></div>
               <div class="menu-recent-projects desktop-only" id="menu-recent-projects"></div>
-              <div class="menu-separator"></div>
-              <button class="menu-action" data-action="export-project">Export Project…</button>
-              <button class="menu-action" data-action="import-project">Import Project…</button>
+              <div class="menu-separator desktop-only" id="menu-portable-separator"></div>
+              <button class="menu-action desktop-only" data-action="export-project">Export Project</button>
+              <button class="menu-action desktop-only" data-action="import-project">Import Project</button>
               <div class="menu-separator desktop-only"></div>
               <button class="menu-action desktop-only" data-action="quit">Quit</button>
             </div>
@@ -136,29 +136,19 @@
     </div>
 
     <div class="studio-topbar-actions">
-      <span id="web-session-bar" class="web-session-bar hidden">
-        <button type="button" class="web-session-info" aria-describedby="web-session-tip" aria-label="This browser tab does not save automatically">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M12 16v-4M12 8h.01"/>
-          </svg>
-        </button>
-        <span id="web-session-tip" class="web-session-tip" role="tooltip">
-          This tab is temporary. Refresh or close it and unsaved work is gone — download a project to keep it, or open that file in the desktop app for MP4.
-        </span>
-      </span>
+      <span id="web-session-bar" class="web-session-bar hidden" role="status" aria-live="polite"></span>
 
       <div class="studio-history" role="group" aria-label="History">
         <button class="btn-icon-sm" id="btn-undo" type="button" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M3 7v6h6"/>
-            <path d="M3 13a9 9 0 1 0 2.68-6.33L3 8"/>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 14 4 9l5-5"/>
+            <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
           </svg>
         </button>
         <button class="btn-icon-sm" id="btn-redo" type="button" title="Redo (Ctrl+Y)" aria-label="Redo" disabled>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 7v6h-6"/>
-            <path d="M21 13a9 9 0 1 1-2.68-6.33L21 8"/>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m15 14 5-5-5-5"/>
+            <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H14"/>
           </svg>
         </button>
       </div>
@@ -682,11 +672,12 @@
             <button class="btn btn-secondary btn-sm" id="btn-load-project" style="flex:1">Load…</button>
           </div>
           <p class="action-caption desktop-only">This device — .spx file</p>
-          <div class="output-row mt-6">
+          <div class="output-row mt-6 desktop-only">
             <button class="btn btn-secondary btn-sm" id="btn-export-project" style="flex:1">Export…</button>
             <button class="btn btn-secondary btn-sm" id="btn-import-project" style="flex:1">Import…</button>
           </div>
-          <p class="action-caption">Portable — .spulse file, share to another device or the desktop app</p>
+          <p class="action-caption desktop-only">Portable — .spulse file, share to another device or the desktop app</p>
+          <p class="action-caption web-only hidden" id="project-web-caption">Downloads a .spulse file — reopen here or in the desktop app</p>
           <p class="export-hint mt-6" id="project-hint">Ctrl+S to save</p>
           <button class="btn btn-destructive btn-sm w-full mt-6" id="btn-reset-defaults">Reset to Default</button>
         </section>
