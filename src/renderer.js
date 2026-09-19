@@ -49,6 +49,7 @@ let _projectFilePath = null   // path of the currently open .spx file
 let _isDirty         = false  // true when state has changed since last save/load
 let _webClean        = null   // session fingerprint at last save / import / download
 let _webSessionKind  = null   // web status text: 'imported' | 'opened' | 'saved'
+let _audioLoadGeneration = 0
 
 // ─── Auto-load last-used project/settings on launch ──────────────────────────
 // State only, applied here before anything below reads visualizerState/exportSettings.
@@ -96,12 +97,17 @@ const overlayTitle  = document.getElementById('overlay-title')
 const overlayArtist = document.getElementById('overlay-artist')
 
 // ─── Load audio from ArrayBuffer + file path ─────────────────────────────────
-async function loadAudio(arrayBuffer, filePath, displayName, { markDirty = true } = {}) {
+async function loadAudio(arrayBuffer, filePath, displayName, { markDirty = true, generation = ++_audioLoadGeneration } = {}) {
   _setDropMessage('⟳ Decoding…', true)
 
   try {
     const loader = new AudioLoader()
     await loader.load(arrayBuffer, displayName || filePath)
+    if (_isLoadStale(generation)) {
+      _revokeBlobUrl(filePath, '')
+      _resetDropMessage()
+      return
+    }
 
     const analyser = new AudioAnalyser(loader.audioContext)
     analyser.setBuffer(loader.audioBuffer)
@@ -167,6 +173,14 @@ async function loadAudio(arrayBuffer, filePath, displayName, { markDirty = true 
   }
 }
 
+function _isLoadStale(generation) {
+  return generation !== _audioLoadGeneration || _isPlaybackControlLocked()
+}
+
+function _invalidatePendingAudioLoads() {
+  _audioLoadGeneration += 1
+}
+
 // ─── Metadata UI update ───────────────────────────────────────────────────────
 function _updateMetaUI(loader) {
   metaTitle.textContent    = loader.metadata.title  || '—'
@@ -194,6 +208,7 @@ function _enableTransport(duration) {
 // ─── Play / Pause ─────────────────────────────────────────────────────────────
 function _togglePlayback() {
   if (isExporting()) return
+  if (_isPlaybackControlLocked()) return
   if (!appState.analyser) return
   if (appState.analyser.isPlaying) {
     appState.analyser.pause()
@@ -211,6 +226,16 @@ function _pauseForExport() {
   appState.analyser.pause()
   canvasEngine.stop()
   _syncPlayIcon(false)
+}
+
+function _isPlaybackControlLocked() {
+  return isWeb() && isWebExporting()
+}
+
+function _startExportFromUi() {
+  _invalidatePendingAudioLoads()
+  _pauseForExport()
+  startExport()
 }
 
 // Stop playback and release the current audio's AudioContext (loadAudio() creates a
@@ -285,17 +310,22 @@ export function _updateScrubber(current, duration) {
 let _scrubbing = false
 scrubberTrack.addEventListener('mousedown', e => {
   if (!appState.analyser || isExporting()) return
+  if (_isPlaybackControlLocked()) return
+  if (!appState.analyser) return
   _scrubbing = true
   _seekFromEvent(e)
 })
 document.addEventListener('mousemove', e => {
   if (!_scrubbing || isExporting()) return
+  if (_isPlaybackControlLocked()) { _scrubbing = false; return }
+  if (!_scrubbing) return
   _seekFromEvent(e)
 })
 document.addEventListener('mouseup', () => { _scrubbing = false })
 
 function _seekFromEvent(e) {
   if (isExporting()) return
+  if (_isPlaybackControlLocked()) return
   const rect = scrubberTrack.getBoundingClientRect()
   const pct  = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1))
   const time = pct * (appState.audioLoader?.duration ?? 0)
@@ -473,13 +503,19 @@ dropZone.addEventListener('drop', async e => {
 
 // ─── File picker (button + Ctrl+O) ───────────────────────────────────────────
 async function _openFilePicker() {
+  const generation = ++_audioLoadGeneration
+  if (_isPlaybackControlLocked()) return
   const result = await window.api.openAudioFile()
   if (!result) return
+  if (_isLoadStale(generation)) {
+    _revokeBlobUrl(result.filePath, '')
+    return
+  }
 
   // result.buffer arrives as Uint8Array via structured clone (contextBridge)
   const u8  = result.buffer instanceof Uint8Array ? result.buffer : new Uint8Array(Object.values(result.buffer))
   const ab  = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength)
-  await loadAudio(ab, result.filePath, result.fileName)
+  await loadAudio(ab, result.filePath, result.fileName, { generation })
 }
 
 btnOpenAudio.addEventListener('click', _openFilePicker)
@@ -511,7 +547,7 @@ document.addEventListener('keydown', e => {
   if (!isWeb() && ctrl && e.shiftKey && e.key.toLowerCase() === 'r') { e.preventDefault(); _resetToDefaults() }
   if (ctrl && e.key === 'o') { e.preventDefault(); _openFilePicker() }
   if (ctrl && e.key === 's') { e.preventDefault(); _saveProject() }
-  if (ctrl && e.key === 'e') { e.preventDefault(); if (appState.loaded) { _pauseForExport(); startExport() } }
+  if (ctrl && e.key === 'e') { e.preventDefault(); if (appState.loaded) _startExportFromUi() }
   if (ctrl && e.key === 'z') { e.preventDefault(); _undo() }
   if (ctrl && e.key === 'y') { e.preventDefault(); _redo() }
   if (ctrl && e.key === 'q') {
@@ -1081,6 +1117,7 @@ function _resetToDefaults() {
 // and clears the open-project association, for a true "start from scratch" reset.
 function _newSession() {
   if (isExporting()) return
+  if (_isPlaybackControlLocked()) return
   if (_isDirty && !confirm('Discard unsaved changes and start a new session?')) return
 
   _unloadAudio()
@@ -1129,8 +1166,7 @@ initOverlayControls(visualizerState.overlay)
 // ─── Wire export button ───────────────────────────────────────────────────────
 document.getElementById('btn-export')?.addEventListener('click', () => {
   if (!appState.loaded) return
-  _pauseForExport()
-  startExport()
+  _startExportFromUi()
 })
 
 function enterHome() {
