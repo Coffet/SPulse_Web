@@ -15,6 +15,10 @@ const SILENCE_LEAD_MS = 120
 
 let _webExporting = false
 
+export function isWebExporting() {
+  return _webExporting
+}
+
 export function pickRecorderMime() {
   if (typeof MediaRecorder === 'undefined') return ''
   const types = [
@@ -109,6 +113,7 @@ async function _runWebExport(appState) {
   try {
     if (analyser.isPlaying) analyser.stop()
     analyser.seek(0)
+    analyser.setOutputMuted?.(true)
     if (analyser.audioContext.state === 'suspended') {
       await analyser.audioContext.resume()
     }
@@ -187,6 +192,7 @@ async function _runWebExport(appState) {
     console.error('Web export error:', err)
   } finally {
     cleanupGraph()
+    analyser.setOutputMuted?.(false)
     canvasEngine.clearExportData()
     canvasEngine.restorePreviewResolution()
     if (btnExport) btnExport.disabled = false
