@@ -1,7 +1,7 @@
 import { AudioLoader }     from './audio/audioLoader.js'
 import { AudioAnalyser }   from './audio/audioAnalyser.js'
 import { canvasEngine }    from './visualizer/canvasEngine.js'
-import { visualizerState, resetVisualizerStateToDefaults } from './visualizer/visualizerState.js'
+import { visualizerState, resetVisualizerStateToDefaults, isVisualizerStateAtDefaults } from './visualizer/visualizerState.js'
 import { initLeftPanel }   from './controls/leftPanel.js'
 import { initPanelTabs }   from './controls/panelTabs.js'
 import { initStylePicker }      from './controls/stylePicker.js'
@@ -12,7 +12,7 @@ import { initOverlayControls }  from './controls/overlayControls.js'
 import { initMenuBar }          from './controls/menuBar.js'
 import { startExport }               from './export/exportPipeline.js'
 import { applyWebExportLimitsToDom, capWebExport } from './export/webRecorder.js'
-import { exportSettings, resetExportSettingsToDefaults } from './export/exportSettings.js'
+import { exportSettings, resetExportSettingsToDefaults, isExportSettingsAtDefaults } from './export/exportSettings.js'
 import { serializeState, deserializeState, serializePortableState } from './project/projectManager.js'
 import { historyManager }                  from './history/historyManager.js'
 import { initErrorDialog }                 from './ui/errorDialog.js'
@@ -482,8 +482,19 @@ document.getElementById('studio-track')?.addEventListener('click', _openFilePick
 document.addEventListener('keydown', e => {
   const ctrl = e.ctrlKey || e.metaKey
 
+  if (e.key === 'F11') { e.preventDefault(); _toggleFullscreen() }
+
+  if (e.key === 'Escape') {
+    document.getElementById('error-modal')?.classList.add('hidden')
+    document.getElementById('about-modal')?.classList.add('hidden')
+  }
+
+  // Ignore all editing, playback, and session shortcuts while the studio is hidden
+  const studio = document.getElementById('studio')
+  if (studio && studio.hidden) return
+
   if (ctrl && e.key === 'n') { e.preventDefault(); _newSession() }
-  if (ctrl && e.shiftKey && e.key.toLowerCase() === 'r') { e.preventDefault(); _resetToDefaults() }
+  if (!isWeb() && ctrl && e.shiftKey && e.key.toLowerCase() === 'r') { e.preventDefault(); _resetToDefaults() }
   if (ctrl && e.key === 'o') { e.preventDefault(); _openFilePicker() }
   if (ctrl && e.key === 's') { e.preventDefault(); _saveProject() }
   if (ctrl && e.key === 'e') { e.preventDefault(); if (appState.loaded) { _pauseForExport(); startExport() } }
@@ -493,15 +504,10 @@ document.addEventListener('keydown', e => {
     e.preventDefault()
     if (!isWeb()) window.api.quit()
   }
-  if (e.key === 'F11') { e.preventDefault(); _toggleFullscreen() }
 
   if (e.key === ' ' && !e.target.matches('input, textarea, select')) {
     e.preventDefault()
     _togglePlayback()
-  }
-  if (e.key === 'Escape') {
-    document.getElementById('error-modal')?.classList.add('hidden')
-    document.getElementById('about-modal')?.classList.add('hidden')
   }
 })
 
@@ -1035,12 +1041,15 @@ async function _importProject() {
 // Also overwrites last-session.json immediately (not the debounced auto-save path)
 // so a relaunch right after reset doesn't restore the pre-reset state.
 function _resetToDefaults() {
+  const alreadyAtDefaults = isVisualizerStateAtDefaults() && isExportSettingsAtDefaults()
   resetVisualizerStateToDefaults()
   resetExportSettingsToDefaults()
   _syncDomFromState(visualizerState, exportSettings)
   clearTimeout(_autoSaveTimer)
   window.api.saveLastSession(_currentLastSessionPayload())
-  _setDirty()
+  if (!alreadyAtDefaults) {
+    _setDirty()
+  }
   const hint = document.getElementById('project-hint')
   if (hint) { hint.textContent = 'Reset to default ✓'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
 }
@@ -1160,7 +1169,7 @@ function applyWebChrome() {
 
 window.addEventListener('beforeunload', e => {
   if (!isWeb()) return
-  if (appState.loaded || _isDirty) {
+  if (_isDirty) {
     e.preventDefault()
     e.returnValue = ''
   }
