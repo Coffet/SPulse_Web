@@ -95,6 +95,7 @@ async function _runWebExport(appState) {
 
   const cleanupGraph = () => {
     try { dest && analyser.analyserNode.disconnect(dest) } catch { /* already disconnected */ }
+    try { analyser.analyserNode.connect(analyser.audioContext.destination) } catch { /* ignore */ }
     canvasStream?.getTracks().forEach(t => t.stop())
     analyser.onEnded = prevOnEnded
   }
@@ -128,6 +129,9 @@ async function _runWebExport(appState) {
     canvasStream = canvas.captureStream(fps)
     dest = analyser.audioContext.createMediaStreamDestination()
     analyser.analyserNode.connect(dest)
+
+    // Mute speakers during recording by disconnecting the speakers destination
+    try { analyser.analyserNode.disconnect(analyser.audioContext.destination) } catch {}
 
     const tracks = [
       ...canvasStream.getVideoTracks(),

@@ -10,7 +10,7 @@ import { showErrorDialog }  from '../ui/errorDialog.js'
 import { visualizerState }  from '../visualizer/visualizerState.js'
 import { analyzeOffline }   from '../audio/offlineFrequencyAnalyser.js'
 import { isWeb }            from '../platform/webApi.js'
-import { startWebExport }   from './webRecorder.js'
+import { startWebExport, isWebExporting }   from './webRecorder.js'
 
 // Silence fallback for any export frame whose real FFT data wasn't captured
 // (export cancelled mid-analysis, or a rendering edge case at the very end of
@@ -34,7 +34,7 @@ let _cancelled  = false
 let _exporting  = false
 
 export function isExporting() {
-  return _exporting
+  return _exporting || isWebExporting()
 }
 
 export async function startExport() {

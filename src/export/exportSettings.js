@@ -24,3 +24,11 @@ export const exportSettings = _createDefaultExportSettings()
 export function resetExportSettingsToDefaults() {
   Object.assign(exportSettings, _createDefaultExportSettings())
 }
+
+export function isExportSettingsAtDefaults() {
+  const defaults = _createDefaultExportSettings()
+  for (const key of Object.keys(defaults)) {
+    if (exportSettings[key] !== defaults[key]) return false
+  }
+  return true
+}
