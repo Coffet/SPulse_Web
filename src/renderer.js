@@ -10,7 +10,7 @@ import { backgroundRenderer }   from './background/backgroundRenderer.js'
 import { textOverlay }          from './overlay/textOverlay.js'
 import { initOverlayControls }  from './controls/overlayControls.js'
 import { initMenuBar }          from './controls/menuBar.js'
-import { startExport }               from './export/exportPipeline.js'
+import { startExport, isExporting }               from './export/exportPipeline.js'
 import { applyWebExportLimitsToDom, capWebExport } from './export/webRecorder.js'
 import { exportSettings, resetExportSettingsToDefaults, isExportSettingsAtDefaults } from './export/exportSettings.js'
 import { serializeState, deserializeState, serializePortableState } from './project/projectManager.js'
@@ -193,6 +193,7 @@ function _enableTransport(duration) {
 
 // ─── Play / Pause ─────────────────────────────────────────────────────────────
 function _togglePlayback() {
+  if (isExporting()) return
   if (!appState.analyser) return
   if (appState.analyser.isPlaying) {
     appState.analyser.pause()
@@ -283,17 +284,18 @@ export function _updateScrubber(current, duration) {
 
 let _scrubbing = false
 scrubberTrack.addEventListener('mousedown', e => {
-  if (!appState.analyser) return
+  if (!appState.analyser || isExporting()) return
   _scrubbing = true
   _seekFromEvent(e)
 })
 document.addEventListener('mousemove', e => {
-  if (!_scrubbing) return
+  if (!_scrubbing || isExporting()) return
   _seekFromEvent(e)
 })
 document.addEventListener('mouseup', () => { _scrubbing = false })
 
 function _seekFromEvent(e) {
+  if (isExporting()) return
   const rect = scrubberTrack.getBoundingClientRect()
   const pct  = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1))
   const time = pct * (appState.audioLoader?.duration ?? 0)
@@ -439,6 +441,10 @@ document.addEventListener('mouseup', () => {
 // ─── Drop zone: drag-and-drop ─────────────────────────────────────────────────
 dropZone.addEventListener('dragover', e => {
   e.preventDefault()
+  if (isExporting()) {
+    e.dataTransfer.dropEffect = 'none'
+    return
+  }
   e.dataTransfer.dropEffect = 'copy'
   dropZone.classList.add('drag-over')
 })
@@ -451,6 +457,7 @@ dropZone.addEventListener('dragleave', e => {
 
 dropZone.addEventListener('drop', async e => {
   e.preventDefault()
+  if (isExporting()) return
   dropZone.classList.remove('drag-over')
 
   const file = e.dataTransfer.files[0]
@@ -487,6 +494,13 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     document.getElementById('error-modal')?.classList.add('hidden')
     document.getElementById('about-modal')?.classList.add('hidden')
+  }
+
+  if (isExporting()) {
+    if (e.key !== 'Escape' && e.key !== 'F11') {
+      e.preventDefault()
+      return
+    }
   }
 
   // Ignore all editing, playback, and session shortcuts while the studio is hidden
@@ -637,6 +651,7 @@ function _applySnapshot(snap) {
 }
 
 function _undo() {
+  if (isExporting()) return
   const snap = historyManager.undo(_snapshotVS())
   if (!snap) return
   _applySnapshot(snap)
@@ -645,6 +660,7 @@ function _undo() {
 }
 
 function _redo() {
+  if (isExporting()) return
   const snap = historyManager.redo(_snapshotVS())
   if (!snap) return
   _applySnapshot(snap)
@@ -885,6 +901,7 @@ function _syncDomFromState(vs, es) {
 
 // ─── Project: save ────────────────────────────────────────────────────────────
 async function _saveProject() {
+  if (isExporting()) return
   const defaultPath = isWeb()
     ? (appState.fileName
         ? appState.fileName.replace(/\.[^.]+$/, '') + '.spulse'
@@ -914,6 +931,7 @@ async function _saveProject() {
 // Distinct from _saveProject(): does not touch _projectFilePath/dirty tracking, since
 // the exported file is a portable copy, not the user's currently-open project file.
 async function _exportProject() {
+  if (isExporting()) return
   const defaultPath = appState.fileName
     ? appState.fileName.replace(/\.[^.]+$/, '') + '.spulse'
     : 'project.spulse'
@@ -1000,6 +1018,7 @@ async function _applyProjectData(projectPath, data, { recordRecent = true, webOp
 
 // ─── Project: load ────────────────────────────────────────────────────────────
 async function _loadProject() {
+  if (isExporting()) return
   const result = await window.api.loadProject()
   if (!result) return   // user cancelled
   await _applyProjectData(result.filePath, result.data, { webOpened: isWeb() ? 'opened' : false })
@@ -1014,6 +1033,7 @@ async function _loadProject() {
 // (user-initiated via a dialog they just confirmed), this can arrive at any time, so
 // it checks for unsaved changes first — same confirm() pattern as _newSession().
 async function _openProjectFile({ filePath, data }) {
+  if (isExporting()) return
   if (_isDirty) {
     const name = filePath.replace(/.*[\\/]/, '')
     if (!confirm(`Discard unsaved changes and open "${name}"?`)) return
@@ -1029,6 +1049,7 @@ async function _openProjectFile({ filePath, data }) {
 // its dialog title and hint text (kept distinct for the same UX-clarity reason as
 // _exportProject() vs _saveProject()).
 async function _importProject() {
+  if (isExporting()) return false
   const result = await window.api.importProject()
   if (!result) return false
   await _applyProjectData(result.filePath, result.data, { recordRecent: false, webOpened: isWeb() ? 'imported' : false })
@@ -1041,6 +1062,7 @@ async function _importProject() {
 // Also overwrites last-session.json immediately (not the debounced auto-save path)
 // so a relaunch right after reset doesn't restore the pre-reset state.
 function _resetToDefaults() {
+  if (isExporting()) return
   const alreadyAtDefaults = isVisualizerStateAtDefaults() && isExportSettingsAtDefaults()
   resetExportSettingsToDefaults()
   resetVisualizerStateToDefaults()
@@ -1058,6 +1080,7 @@ function _resetToDefaults() {
 // A superset of _resetToDefaults(): also unloads whatever audio is currently loaded
 // and clears the open-project association, for a true "start from scratch" reset.
 function _newSession() {
+  if (isExporting()) return
   if (_isDirty && !confirm('Discard unsaved changes and start a new session?')) return
 
   _unloadAudio()
