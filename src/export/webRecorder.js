@@ -6,6 +6,7 @@ import { progressModal }   from './progressModal.js'
 import { canvasEngine }    from '../visualizer/canvasEngine.js'
 import { exportSettings }  from './exportSettings.js'
 import { showErrorDialog } from '../ui/errorDialog.js'
+import { showConfirmDialog } from '../ui/confirmDialog.js'
 import { isWeb }           from '../platform/webApi.js'
 
 export const WEB_MAX_PIXELS = 1920 * 1080
@@ -47,10 +48,10 @@ function _sleep(ms) {
 
 export async function startWebExport() {
   const appState = window.appState
-  if (!appState?.loaded || _webExporting) return
+  if (!appState?.loaded || _webExporting) return false
   _webExporting = true
   try {
-    await _runWebExport(appState)
+    return await _runWebExport(appState)
   } finally {
     _webExporting = false
   }
@@ -58,13 +59,21 @@ export async function startWebExport() {
 
 async function _runWebExport(appState) {
 
+  if (document.visibilityState !== 'visible') {
+    showErrorDialog(
+      'Keep window in foreground',
+      'Browser recording only works while this tab/window is visible. Bring SPulse to the foreground and try export again.',
+    )
+    return false
+  }
+
   const mime = pickRecorderMime()
   if (!mime) {
     showErrorDialog(
       'Export not supported',
       'This browser cannot record canvas video. Try Chrome or Edge, or export a .spulse project and encode MP4 in the desktop app.',
     )
-    return
+    return false
   }
 
   capWebExport(exportSettings)
@@ -75,10 +84,18 @@ async function _runWebExport(appState) {
 
   if (duration >= 180) {
     const mins = Math.ceil(duration / 60)
-    const ok = confirm(
-      `Browser export records in real time, so this will take about ${mins} minute${mins === 1 ? '' : 's'}. Continue?`,
-    )
-    if (!ok) return
+    const ok = await showConfirmDialog({
+      title: 'Long export time',
+      message: `Browser export records in real time, so this export will take about ${mins} minute${mins === 1 ? '' : 's'}. Continue?`,
+      confirmLabel: 'Continue export',
+      cancelLabel: 'Cancel',
+    })
+    if (!ok) return false
+
+    // Safety: when user explicitly continues, force-stop any residual preview
+    // playback before entering recording mode.
+    if (analyser.isPlaying) analyser.stop()
+    canvasEngine.stop()
   }
 
   const btnExport = document.getElementById('btn-export')
@@ -87,11 +104,26 @@ async function _runWebExport(appState) {
   if (btnPlay)   btnPlay.disabled   = true
 
   let cancelled = false
+  let cancelReason = ''
   let rec = null
   let dest = null
   let canvasStream = null
   const prevOnEnded = analyser.onEnded
   const chunks = []
+
+  const cancelRecording = (reason = 'user') => {
+    cancelled = true
+    cancelReason = reason
+    try { rec?.state === 'recording' && rec.stop() } catch { /* ignore */ }
+    analyser.stop()
+    canvasEngine.stop()
+  }
+
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'hidden' && !cancelled) {
+      cancelRecording('background')
+    }
+  }
 
   const cleanupGraph = () => {
     try { dest && analyser.analyserNode.disconnect(dest) } catch { /* already disconnected */ }
@@ -101,15 +133,14 @@ async function _runWebExport(appState) {
   }
 
   progressModal.init(() => {
-    cancelled = true
-    try { rec?.state === 'recording' && rec.stop() } catch { /* ignore */ }
-    analyser.stop()
-    canvasEngine.stop()
+    cancelRecording('user')
   })
   progressModal.show(totalFrames, {
     title: 'Recording video…',
     realtime: true,
   })
+
+  document.addEventListener('visibilitychange', onVisibilityChange)
 
   try {
     if (analyser.isPlaying) analyser.stop()
@@ -174,13 +205,19 @@ async function _runWebExport(appState) {
     clearInterval(tick)
 
     if (rec.state === 'recording') rec.stop()
-    analyser.pause()
+    analyser.stop()
     canvasEngine.stop()
     await stopped
 
     if (cancelled) {
       progressModal.hide()
-      return
+      if (cancelReason === 'background') {
+        showErrorDialog(
+          'Recording interrupted',
+          'Browser recording paused because SPulse was in the background. Keep this window visible during export and try again.',
+        )
+      }
+      return true
     }
 
     const blob = new Blob(chunks, { type: mime.split(';')[0] })
@@ -190,11 +227,14 @@ async function _runWebExport(appState) {
     const filename = `${base}-spulse.webm`
     window.api.downloadBlob?.(blob, filename)
     progressModal.complete(filename)
+    return true
   } catch (err) {
     progressModal.hide()
     showErrorDialog('Export Error', err.message || String(err))
     console.error('Web export error:', err)
+    return true
   } finally {
+    document.removeEventListener('visibilitychange', onVisibilityChange)
     cleanupGraph()
     analyser.setOutputMuted?.(false)
     canvasEngine.clearExportData()

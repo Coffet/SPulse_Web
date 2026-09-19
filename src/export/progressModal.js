@@ -10,6 +10,22 @@ export const progressModal = {
   _outputPath: null,
   _realtime:   false,
 
+  _formatEta(seconds) {
+    let s = Math.max(0, Math.ceil(seconds || 0))
+    if (s < 60) return `${s}s`
+
+    const d = Math.floor(s / 86400)
+    s -= d * 86400
+    const h = Math.floor(s / 3600)
+    s -= h * 3600
+    const m = Math.floor(s / 60)
+    s -= m * 60
+
+    if (d > 0) return h > 0 ? `${d}d ${h}h` : `${d}d`
+    if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`
+    return s > 0 ? `${m}m ${s}s` : `${m}m`
+  },
+
   init(onCancel) {
     this._overlay  = document.getElementById('export-modal')
     this._fill     = document.getElementById('export-progress-fill')
@@ -39,6 +55,7 @@ export const progressModal = {
     document.getElementById('btn-export-close')?.classList.add('hidden')
     document.getElementById('btn-open-folder')?.classList.add('hidden')
 
+    document.body.classList.add('exporting')
     this._overlay?.classList.remove('hidden')
     this.update(0, totalFrames)
   },
@@ -56,9 +73,10 @@ export const progressModal = {
       const elapsed = (performance.now() - this._startTs) / 1000
       const rate    = framesDone / elapsed
       const rem     = (totalFrames - framesDone) / Math.max(rate, 0.1)
+      const eta     = this._formatEta(rem)
       this._eta.textContent = this._realtime
-        ? `~${Math.ceil(rem)}s remaining`
-        : `~${Math.ceil(rem)}s remaining  (${rate.toFixed(1)} fps)`
+        ? `~${eta} remaining`
+        : `~${eta} remaining  (${rate.toFixed(1)} fps)`
     }
   },
 
@@ -88,6 +106,7 @@ export const progressModal = {
 
   hide() {
     this._overlay?.classList.add('hidden')
+    document.body.classList.remove('exporting')
     this._outputPath = null
   },
 }

@@ -38,13 +38,13 @@ export function isExporting() {
 }
 
 export async function startExport() {
-  if (!window.appState?.loaded) return
+  if (!window.appState?.loaded) return false
   if (isWeb()) return startWebExport()
 
   const appState = window.appState
   // Guard against re-entrant calls (double-click, Ctrl+E while exporting) —
   // a second export-video call would kill the in-flight FFmpeg process mid-stream.
-  if (_exporting) return
+  if (_exporting) return false
   _exporting  = true
   _cancelled  = false
   const btnExport = document.getElementById('btn-export')
@@ -67,7 +67,7 @@ export async function startExport() {
       _exporting = false
       if (btnExport) btnExport.disabled = false
       if (btnPlay)   btnPlay.disabled   = false
-      return
+      return false
     }
     outputPath = picked
     exportSettings.outputPath = picked
@@ -183,4 +183,6 @@ export async function startExport() {
     if (btnExport) btnExport.disabled = false
     if (btnPlay)   btnPlay.disabled   = false
   }
+
+  return true
 }

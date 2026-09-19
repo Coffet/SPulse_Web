@@ -11,12 +11,13 @@ import { textOverlay }          from './overlay/textOverlay.js'
 import { initOverlayControls }  from './controls/overlayControls.js'
 import { initMenuBar }          from './controls/menuBar.js'
 import { startExport, isExporting }               from './export/exportPipeline.js'
-import { applyWebExportLimitsToDom, capWebExport } from './export/webRecorder.js'
+import { applyWebExportLimitsToDom, capWebExport, isWebExporting } from './export/webRecorder.js'
 import { exportSettings, resetExportSettingsToDefaults, isExportSettingsAtDefaults } from './export/exportSettings.js'
 import { serializeState, deserializeState, serializePortableState } from './project/projectManager.js'
 import { historyManager }                  from './history/historyManager.js'
 import { initErrorDialog }                 from './ui/errorDialog.js'
 import { initAboutScreen, showAbout }      from './ui/aboutScreen.js'
+import { initConfirmDialog } from './ui/confirmDialog.js'
 import { initUpdateBanner, checkForUpdatesManually } from './ui/updateBanner.js'
 import { initTheme }                       from './ui/theme.js'
 import { ensurePlatformApi, isWeb }        from './platform/webApi.js'
@@ -82,6 +83,7 @@ const timeCurrent   = document.getElementById('time-current')
 const timeTotal     = document.getElementById('time-total')
 const btnOpenAudio  = document.getElementById('btn-open-audio')
 const btnExport     = document.getElementById('btn-export')
+const studioExport  = document.querySelector('.studio-export')
 const exportHint    = document.getElementById('export-hint')
 const audioInfoEmpty = document.getElementById('audio-info-empty')
 const btnFullscreen = document.getElementById('btn-fullscreen')
@@ -189,14 +191,13 @@ function _updateMetaUI(loader) {
   metaDuration.textContent = _fmtTime(loader.duration)
   audioInfoEmpty.classList.add('hidden')
   audioMeta.classList.remove('hidden')
-  const trackName = document.getElementById('studio-track-name')
-  if (trackName) trackName.textContent = appState.fileName || loader.fileName || 'Audio loaded'
+  _setStudioTrackName(appState.fileName || loader.fileName || 'Audio loaded')
   _setStudioTrackEmpty(false)
 }
 
 function _enableTransport(duration) {
   btnPlay.disabled   = false
-  btnExport.disabled = false
+  _syncExportButtonState()
   exportHint.textContent = isWeb()
     ? 'Records in real time · desktop app exports MP4 faster'
     : 'Ready to export'
@@ -207,8 +208,7 @@ function _enableTransport(duration) {
 
 // ─── Play / Pause ─────────────────────────────────────────────────────────────
 function _togglePlayback() {
-  if (isExporting()) return
-  if (_isPlaybackControlLocked()) return
+  if (_isTransportInteractionBlocked()) return
   if (!appState.analyser) return
   if (appState.analyser.isPlaying) {
     appState.analyser.pause()
@@ -232,10 +232,30 @@ function _isPlaybackControlLocked() {
   return isWeb() && isWebExporting()
 }
 
-function _startExportFromUi() {
+function _isTransportInteractionBlocked() {
+  return isExporting() || _isPlaybackControlLocked()
+}
+
+function _isAppActionBlocked() {
+  return isExporting()
+}
+
+function _isSessionTransitionBlocked() {
+  return _isTransportInteractionBlocked()
+}
+
+async function _startExportFromUi() {
   _invalidatePendingAudioLoads()
+  const wasPlaying = !!appState.analyser?.isPlaying
   _pauseForExport()
-  startExport()
+
+  const started = await startExport()
+
+  if (!started && wasPlaying && appState.analyser && !isExporting() && !_isPlaybackControlLocked()) {
+    appState.analyser.play()
+    canvasEngine.start()
+    _syncPlayIcon(true)
+  }
 }
 
 // Stop playback and release the current audio's AudioContext (loadAudio() creates a
@@ -266,7 +286,7 @@ function _resetAudioUI() {
   audioInfoEmpty.classList.remove('hidden')
   audioMeta.classList.add('hidden')
   btnPlay.disabled        = true
-  btnExport.disabled      = true
+  _syncExportButtonState()
   exportHint.textContent  = 'Load an audio file to export'
   if (btnExport) btnExport.title = exportHint.textContent
   timeCurrent.textContent = '0:00'
@@ -275,16 +295,42 @@ function _resetAudioUI() {
   scrubberThumb.style.left = '0%'
   _resetDropMessage()
   dropOverlay.classList.remove('hidden')
-  const trackName = document.getElementById('studio-track-name')
-  if (trackName) trackName.textContent = 'Open audio'
+  _setStudioTrackName('Open audio')
   _setStudioTrackEmpty(true)
+}
+
+function _setStudioTrackName(name) {
+  const trackName = document.getElementById('studio-track-name')
+  if (!trackName) return
+  const full = String(name || '').trim() || 'Open audio'
+  trackName.textContent = _formatTrackLabel(full)
+  trackName.dataset.fullName = full
+}
+
+function _formatTrackLabel(name, max = 52) {
+  if (name.length <= max) return name
+  const ext = name.match(/\.[^./\\]{1,10}$/)?.[0] || ''
+  const stem = ext ? name.slice(0, -ext.length) : name
+  if (max <= ext.length + 2) return `${name.slice(0, max - 1)}…`
+  const budget = max - ext.length - 1
+  const head = Math.max(18, Math.ceil(budget * 0.7))
+  const tail = Math.max(8, budget - head)
+  return `${stem.slice(0, head)}…${stem.slice(-tail)}${ext}`
 }
 
 function _setStudioTrackEmpty(empty) {
   const track = document.getElementById('studio-track')
   if (!track) return
   track.dataset.empty = empty ? 'true' : 'false'
-  track.title = empty ? 'Open audio file' : (document.getElementById('studio-track-name')?.textContent || 'Open audio file')
+  const fullName = document.getElementById('studio-track-name')?.dataset.fullName || document.getElementById('studio-track-name')?.textContent
+  track.title = empty ? 'Open audio file' : (fullName || 'Open audio file')
+}
+
+function _syncExportButtonState() {
+  if (!btnExport) return
+  const enabled = !!appState.loaded
+  btnExport.disabled = !enabled
+  studioExport?.classList.toggle('is-disabled', !enabled)
 }
 
 function _onPlaybackEnded() {
@@ -309,23 +355,20 @@ export function _updateScrubber(current, duration) {
 
 let _scrubbing = false
 scrubberTrack.addEventListener('mousedown', e => {
-  if (!appState.analyser || isExporting()) return
-  if (_isPlaybackControlLocked()) return
-  if (!appState.analyser) return
+  if (!appState.analyser || _isTransportInteractionBlocked()) return
   _scrubbing = true
   _seekFromEvent(e)
 })
 document.addEventListener('mousemove', e => {
   if (!_scrubbing || isExporting()) return
-  if (_isPlaybackControlLocked()) { _scrubbing = false; return }
+  if (_isTransportInteractionBlocked()) { _scrubbing = false; return }
   if (!_scrubbing) return
   _seekFromEvent(e)
 })
 document.addEventListener('mouseup', () => { _scrubbing = false })
 
 function _seekFromEvent(e) {
-  if (isExporting()) return
-  if (_isPlaybackControlLocked()) return
+  if (_isTransportInteractionBlocked()) return
   const rect = scrubberTrack.getBoundingClientRect()
   const pct  = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1))
   const time = pct * (appState.audioLoader?.duration ?? 0)
@@ -471,7 +514,7 @@ document.addEventListener('mouseup', () => {
 // ─── Drop zone: drag-and-drop ─────────────────────────────────────────────────
 dropZone.addEventListener('dragover', e => {
   e.preventDefault()
-  if (isExporting()) {
+  if (_isAppActionBlocked()) {
     e.dataTransfer.dropEffect = 'none'
     return
   }
@@ -487,7 +530,7 @@ dropZone.addEventListener('dragleave', e => {
 
 dropZone.addEventListener('drop', async e => {
   e.preventDefault()
-  if (isExporting()) return
+  if (_isAppActionBlocked()) return
   dropZone.classList.remove('drag-over')
 
   const file = e.dataTransfer.files[0]
@@ -504,7 +547,7 @@ dropZone.addEventListener('drop', async e => {
 // ─── File picker (button + Ctrl+O) ───────────────────────────────────────────
 async function _openFilePicker() {
   const generation = ++_audioLoadGeneration
-  if (_isPlaybackControlLocked()) return
+  if (_isTransportInteractionBlocked()) return
   const result = await window.api.openAudioFile()
   if (!result) return
   if (_isLoadStale(generation)) {
@@ -687,7 +730,7 @@ function _applySnapshot(snap) {
 }
 
 function _undo() {
-  if (isExporting()) return
+  if (_isAppActionBlocked()) return
   const snap = historyManager.undo(_snapshotVS())
   if (!snap) return
   _applySnapshot(snap)
@@ -696,7 +739,7 @@ function _undo() {
 }
 
 function _redo() {
-  if (isExporting()) return
+  if (_isAppActionBlocked()) return
   const snap = historyManager.redo(_snapshotVS())
   if (!snap) return
   _applySnapshot(snap)
@@ -937,7 +980,7 @@ function _syncDomFromState(vs, es) {
 
 // ─── Project: save ────────────────────────────────────────────────────────────
 async function _saveProject() {
-  if (isExporting()) return
+  if (_isAppActionBlocked()) return
   const defaultPath = isWeb()
     ? (appState.fileName
         ? appState.fileName.replace(/\.[^.]+$/, '') + '.spulse'
@@ -967,7 +1010,7 @@ async function _saveProject() {
 // Distinct from _saveProject(): does not touch _projectFilePath/dirty tracking, since
 // the exported file is a portable copy, not the user's currently-open project file.
 async function _exportProject() {
-  if (isExporting()) return
+  if (_isAppActionBlocked()) return
   const defaultPath = appState.fileName
     ? appState.fileName.replace(/\.[^.]+$/, '') + '.spulse'
     : 'project.spulse'
@@ -1054,7 +1097,7 @@ async function _applyProjectData(projectPath, data, { recordRecent = true, webOp
 
 // ─── Project: load ────────────────────────────────────────────────────────────
 async function _loadProject() {
-  if (isExporting()) return
+  if (_isAppActionBlocked()) return
   const result = await window.api.loadProject()
   if (!result) return   // user cancelled
   await _applyProjectData(result.filePath, result.data, { webOpened: isWeb() ? 'opened' : false })
@@ -1069,7 +1112,7 @@ async function _loadProject() {
 // (user-initiated via a dialog they just confirmed), this can arrive at any time, so
 // it checks for unsaved changes first — same confirm() pattern as _newSession().
 async function _openProjectFile({ filePath, data }) {
-  if (isExporting()) return
+  if (_isAppActionBlocked()) return
   if (_isDirty) {
     const name = filePath.replace(/.*[\\/]/, '')
     if (!confirm(`Discard unsaved changes and open "${name}"?`)) return
@@ -1085,7 +1128,7 @@ async function _openProjectFile({ filePath, data }) {
 // its dialog title and hint text (kept distinct for the same UX-clarity reason as
 // _exportProject() vs _saveProject()).
 async function _importProject() {
-  if (isExporting()) return false
+  if (_isAppActionBlocked()) return false
   const result = await window.api.importProject()
   if (!result) return false
   await _applyProjectData(result.filePath, result.data, { recordRecent: false, webOpened: isWeb() ? 'imported' : false })
@@ -1098,7 +1141,7 @@ async function _importProject() {
 // Also overwrites last-session.json immediately (not the debounced auto-save path)
 // so a relaunch right after reset doesn't restore the pre-reset state.
 function _resetToDefaults() {
-  if (isExporting()) return
+  if (_isAppActionBlocked()) return
   const alreadyAtDefaults = isVisualizerStateAtDefaults() && isExportSettingsAtDefaults()
   resetExportSettingsToDefaults()
   resetVisualizerStateToDefaults()
@@ -1116,8 +1159,7 @@ function _resetToDefaults() {
 // A superset of _resetToDefaults(): also unloads whatever audio is currently loaded
 // and clears the open-project association, for a true "start from scratch" reset.
 function _newSession() {
-  if (isExporting()) return
-  if (_isPlaybackControlLocked()) return
+  if (_isSessionTransitionBlocked()) return
   if (_isDirty && !confirm('Discard unsaved changes and start a new session?')) return
 
   _unloadAudio()
@@ -1235,6 +1277,7 @@ window.addEventListener('beforeunload', e => {
 })
 
 applyWebChrome()
+_syncExportButtonState()
 
 document.getElementById('home-new')?.addEventListener('click', () => enterStudio())
 document.getElementById('home-import')?.addEventListener('click', async () => {
@@ -1408,6 +1451,7 @@ initMenuBar({
 // ─── Init UI components ───────────────────────────────────────────────────────
 initErrorDialog()
 initAboutScreen()
+initConfirmDialog()
 initTheme()
 _syncHistoryButtons()
 
