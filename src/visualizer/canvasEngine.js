@@ -86,6 +86,8 @@ class CanvasEngine {
   start() {
     if (this.running || !this.r2d) return
     this.running = true
+    this._fpsFrames = 0
+    this._fpsAccum  = 0
     this._lastTs = performance.now()
     this._loop()
   }
@@ -93,6 +95,7 @@ class CanvasEngine {
   stop() {
     this.running = false
     if (this._rafId) { cancelAnimationFrame(this._rafId); this._rafId = null }
+    this._resetFpsDisplay()
     // Render one static frame so canvas shows current state while paused
     this._drawFrame(performance.now())
   }
@@ -107,6 +110,7 @@ class CanvasEngine {
     // defaulting to 16:9 if none has been set yet.
     this._resizePreviewCanvas(this._previewW ?? 1280, this._previewH ?? 720)
     this._fpsEl = document.getElementById('fps-counter')
+    this._resetFpsDisplay()
     this._fitWrapper()
     window.addEventListener('resize', () => this._fitWrapper())
     // Draw one idle frame immediately so the canvas isn't black
@@ -130,6 +134,12 @@ class CanvasEngine {
 
     wrapper.style.width  = `${Math.floor(w)}px`
     wrapper.style.height = `${Math.floor(h)}px`
+  }
+
+  _resetFpsDisplay() {
+    this._fpsFrames = 0
+    this._fpsAccum  = 0
+    if (this._fpsEl) this._fpsEl.textContent = '-- fps'
   }
 
   _loop() {
