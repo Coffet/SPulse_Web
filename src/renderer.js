@@ -1042,8 +1042,8 @@ async function _importProject() {
 // so a relaunch right after reset doesn't restore the pre-reset state.
 function _resetToDefaults() {
   const alreadyAtDefaults = isVisualizerStateAtDefaults() && isExportSettingsAtDefaults()
-  resetVisualizerStateToDefaults()
   resetExportSettingsToDefaults()
+  resetVisualizerStateToDefaults()
   _syncDomFromState(visualizerState, exportSettings)
   clearTimeout(_autoSaveTimer)
   window.api.saveLastSession(_currentLastSessionPayload())
