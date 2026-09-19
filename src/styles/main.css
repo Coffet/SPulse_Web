@@ -993,7 +993,7 @@ body.exporting #transport-bar {
   border-radius: var(--radius-lg);
   padding: 32px 36px;
   min-width: 380px;
-  max-width: 480px;
+  max-width: 400px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1038,19 +1038,32 @@ body.exporting #transport-bar {
 }
 
 .confirm-modal {
-  min-width: 420px;
+  min-width: min(420px, calc(100vw - 32px));
+  gap: 16px;
 }
 
 .confirm-message {
   margin: 0;
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--color-text-secondary);
   white-space: pre-line;
 }
 
 .confirm-actions {
   justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.confirm-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+
+.confirm-primary:hover {
+  background: color-mix(in oklch, var(--color-accent) 88%, white);
+  border-color: color-mix(in oklch, var(--color-accent) 88%, white);
 }
 
 .mt-4 { margin-top: 4px; }

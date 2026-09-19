@@ -2,6 +2,7 @@
 // native window.confirm so prompts match the rest of SPulse UI.
 
 let _resolver = null
+let _returnFocus = null
 
 function _getEls() {
   return {
@@ -19,6 +20,8 @@ function _settle(value) {
   modal.classList.add('hidden')
   const resolve = _resolver
   _resolver = null
+  _returnFocus?.focus?.()
+  _returnFocus = null
   resolve(value)
 }
 
@@ -39,6 +42,21 @@ export function initConfirmDialog() {
     if (e.key !== 'Escape') return
     if (modal.classList.contains('hidden')) return
     _settle(false)
+  })
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Tab' || modal.classList.contains('hidden')) return
+    const focusable = [cancelBtn, confirmBtn].filter(Boolean)
+    if (!focusable.length) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault()
+      first.focus()
+    }
   })
 }
 
@@ -62,8 +80,9 @@ export function showConfirmDialog({
   confirmBtn.classList.toggle('btn-destructive', !!confirmDestructive)
   confirmBtn.classList.toggle('btn-secondary', !confirmDestructive)
 
+  _returnFocus = document.activeElement
   modal.classList.remove('hidden')
-  confirmBtn.focus()
+  cancelBtn.focus()
 
   return new Promise(resolve => {
     _resolver = resolve

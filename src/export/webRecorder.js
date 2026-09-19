@@ -87,15 +87,10 @@ async function _runWebExport(appState) {
     const ok = await showConfirmDialog({
       title: 'Long export time',
       message: `Browser export records in real time, so this export will take about ${mins} minute${mins === 1 ? '' : 's'}. Continue?`,
-      confirmLabel: 'Continue export',
+      confirmLabel: 'Continue',
       cancelLabel: 'Cancel',
     })
     if (!ok) return false
-
-    // Safety: when user explicitly continues, force-stop any residual preview
-    // playback before entering recording mode.
-    if (analyser.isPlaying) analyser.stop()
-    canvasEngine.stop()
   }
 
   const btnExport = document.getElementById('btn-export')
