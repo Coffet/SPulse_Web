@@ -7,6 +7,7 @@ export class AudioAnalyser {
     this.analyserNode.smoothingTimeConstant = 0.8
     this._playbackGain = audioContext.createGain()
     this._playbackGain.gain.value = 1
+    this._volume = 1
     this.analyserNode.connect(this._playbackGain)
     this._playbackGain.connect(audioContext.destination)
 
@@ -73,7 +74,16 @@ export class AudioAnalyser {
   }
 
   setOutputMuted(muted) {
-    this._playbackGain.gain.value = muted ? 0 : 1
+    this._playbackGain.gain.value = muted ? 0 : this._volume
+  }
+
+  setVolume(value) {
+    this._volume = Math.max(0, Math.min(1, Number(value) || 0))
+    this._playbackGain.gain.value = this._volume
+  }
+
+  get volume() {
+    return this._volume
   }
 
   play() {

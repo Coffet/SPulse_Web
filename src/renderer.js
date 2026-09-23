@@ -21,6 +21,7 @@ import { initConfirmDialog } from './ui/confirmDialog.js'
 import { initUpdateBanner, checkForUpdatesManually } from './ui/updateBanner.js'
 import { initTheme }                       from './ui/theme.js'
 import { ensurePlatformApi, isWeb }        from './platform/webApi.js'
+import { exportMissionManager }             from './export/exportMissionManager.js'
 import { drawBarMirror }   from './visualizer/modes/barMirror.js'
 import { drawLineSmooth }  from './visualizer/modes/lineSmooth.js'
 import { drawLineFill }    from './visualizer/modes/lineFill.js'
@@ -38,6 +39,7 @@ export const appState = {
 window.appState = appState   // expose for non-module script interop if needed
 
 ensurePlatformApi()
+exportMissionManager.init()
 
 function _defaultProjectHint() {
   return isWeb()
@@ -87,6 +89,8 @@ const studioExport  = document.querySelector('.studio-export')
 const exportHint    = document.getElementById('export-hint')
 const audioInfoEmpty = document.getElementById('audio-info-empty')
 const btnFullscreen = document.getElementById('btn-fullscreen')
+const btnVolume     = document.getElementById('btn-volume')
+const volumeSlider  = document.getElementById('volume-slider')
 const toggleRightPanel = document.getElementById('toggle-right-panel')
 const appLayout     = document.querySelector('.app-layout')
 const audioMeta     = document.getElementById('audio-meta')
@@ -176,7 +180,7 @@ async function loadAudio(arrayBuffer, filePath, displayName, { markDirty = true,
 }
 
 function _isLoadStale(generation) {
-  return generation !== _audioLoadGeneration || _isInteractionBlocked('playback')
+  return generation !== _audioLoadGeneration || _isInteractionBlocked('session')
 }
 
 function _invalidatePendingAudioLoads() {
@@ -195,8 +199,29 @@ function _updateMetaUI(loader) {
   _setStudioTrackEmpty(false)
 }
 
+function _syncVolumeUi(value) {
+  const percent = Math.round(Math.max(0, Math.min(1, value)) * 100)
+  const muted = percent === 0
+  volumeSlider?.setAttribute('aria-valuetext', `${percent}%`)
+  btnVolume?.setAttribute('title', muted ? 'Unmute' : `Volume ${percent}%`)
+  btnVolume?.setAttribute('aria-label', muted ? 'Unmute' : `Volume ${percent}%`)
+  btnVolume?.querySelector('.volume-icon-high')?.classList.toggle('hidden', muted)
+  btnVolume?.querySelector('.volume-icon-muted')?.classList.toggle('hidden', !muted)
+}
+
+function _setPlaybackVolume(value) {
+  const volume = Math.max(0, Math.min(1, Number(value) || 0))
+  appState.analyser?.setVolume(volume)
+  if (volumeSlider) volumeSlider.value = String(Math.round(volume * 100))
+  _syncVolumeUi(volume)
+}
+
 function _enableTransport(duration) {
   btnPlay.disabled   = false
+  if (volumeSlider) volumeSlider.disabled = false
+  if (appState.analyser) appState.analyser.setVolume(1)
+  if (volumeSlider) volumeSlider.value = '100'
+  _syncVolumeUi(1)
   _syncExportButtonState()
   exportHint.textContent = isWeb()
     ? 'Records in real time · desktop app exports MP4 faster'
@@ -222,6 +247,8 @@ function _togglePlayback() {
 }
 
 function _pauseForExport() {
+  if (isWeb()) return
+  if (isExporting()) return
   if (!appState.analyser?.isPlaying) return
   appState.analyser.pause()
   canvasEngine.stop()
@@ -230,6 +257,9 @@ function _pauseForExport() {
 
 function _isInteractionBlocked(scope = 'app') {
   const exporting = isExporting()
+  if (scope === 'playback') return exporting && !isWeb()
+  if (scope === 'editor') return exporting && !isWeb()
+  if (scope === 'session') return exporting
   if (scope === 'app') return exporting
   return exporting || (isWeb() && isWebExporting())
 }
@@ -276,6 +306,11 @@ function _resetAudioUI() {
   audioInfoEmpty.classList.remove('hidden')
   audioMeta.classList.add('hidden')
   btnPlay.disabled        = true
+  if (volumeSlider) {
+    volumeSlider.disabled = true
+    volumeSlider.value = '100'
+  }
+  _syncVolumeUi(1)
   _syncExportButtonState()
   exportHint.textContent  = 'Load an audio file to export'
   if (btnExport) btnExport.title = exportHint.textContent
@@ -341,29 +376,50 @@ export function _updateScrubber(current, duration) {
   scrubberFill.style.width  = `${pct * 100}%`
   scrubberThumb.style.left  = `${pct * 100}%`
   timeCurrent.textContent   = _fmtTime(current)
+  scrubberTrack?.setAttribute('aria-valuemax', String(duration || 0))
+  scrubberTrack?.setAttribute('aria-valuenow', String(Math.max(0, current || 0)))
+  scrubberTrack?.setAttribute('aria-valuetext', _fmtTime(current || 0))
 }
 
 let _scrubbing = false
-scrubberTrack.addEventListener('mousedown', e => {
+scrubberTrack.addEventListener('pointerdown', e => {
   if (!appState.analyser || _isInteractionBlocked('playback')) return
   _scrubbing = true
+  scrubberTrack.setPointerCapture?.(e.pointerId)
   _seekFromEvent(e)
 })
-document.addEventListener('mousemove', e => {
-  if (!_scrubbing || isExporting()) return
-  if (_isInteractionBlocked('playback')) { _scrubbing = false; return }
+document.addEventListener('pointermove', e => {
   if (!_scrubbing) return
+  if (_isInteractionBlocked('playback')) { _scrubbing = false; return }
   _seekFromEvent(e)
 })
-document.addEventListener('mouseup', () => { _scrubbing = false })
+document.addEventListener('pointerup', () => { _scrubbing = false })
+scrubberTrack.addEventListener('keydown', e => {
+  if (!appState.analyser || _isInteractionBlocked('playback')) return
+  const duration = appState.audioLoader?.duration ?? 0
+  const step = e.shiftKey ? 10 : 5
+  let time = appState.analyser.currentTime
+  if (e.key === 'ArrowLeft') time -= step
+  else if (e.key === 'ArrowRight') time += step
+  else if (e.key === 'Home') time = 0
+  else if (e.key === 'End') time = duration
+  else return
+  e.preventDefault()
+  _seekToTime(time)
+})
 
 function _seekFromEvent(e) {
   if (_isInteractionBlocked('playback')) return
   const rect = scrubberTrack.getBoundingClientRect()
   const pct  = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1))
-  const time = pct * (appState.audioLoader?.duration ?? 0)
+  _seekToTime(pct * (appState.audioLoader?.duration ?? 0))
+}
+
+function _seekToTime(time) {
+  const duration = appState.audioLoader?.duration ?? 0
+  time = Math.max(0, Math.min(time, duration))
   appState.analyser.seek(time)
-  _updateScrubber(time, appState.audioLoader?.duration ?? 0)
+  _updateScrubber(time, duration)
   // When paused, draw one frame to preview the seek position
   if (!appState.analyser.isPlaying) canvasEngine.stop()
 }
@@ -504,7 +560,7 @@ document.addEventListener('mouseup', () => {
 // ─── Drop zone: drag-and-drop ─────────────────────────────────────────────────
 dropZone.addEventListener('dragover', e => {
   e.preventDefault()
-  if (_isInteractionBlocked()) {
+  if (_isInteractionBlocked('session')) {
     e.dataTransfer.dropEffect = 'none'
     return
   }
@@ -520,7 +576,7 @@ dropZone.addEventListener('dragleave', e => {
 
 dropZone.addEventListener('drop', async e => {
   e.preventDefault()
-  if (_isInteractionBlocked()) return
+  if (_isInteractionBlocked('session')) return
   dropZone.classList.remove('drag-over')
 
   const file = e.dataTransfer.files[0]
@@ -537,7 +593,7 @@ dropZone.addEventListener('drop', async e => {
 // ─── File picker (button + Ctrl+O) ───────────────────────────────────────────
 async function _openFilePicker() {
   const generation = ++_audioLoadGeneration
-  if (_isInteractionBlocked('playback')) return
+  if (_isInteractionBlocked('session')) return
   const result = await window.api.openAudioFile()
   if (!result) return
   if (_isLoadStale(generation)) {
@@ -565,13 +621,7 @@ document.addEventListener('keydown', e => {
     document.getElementById('about-modal')?.classList.add('hidden')
   }
 
-  if (isExporting()) {
-    if (e.key !== 'Escape' && e.key !== 'F11') {
-      e.preventDefault()
-      return
-    }
-  }
-
+  const isPlaybackShortcut = e.key === ' ' && !e.target.matches('input, textarea, select')
   // Ignore all editing, playback, and session shortcuts while the studio is hidden
   const studio = document.getElementById('studio')
   if (studio && studio.hidden) return
@@ -588,13 +638,19 @@ document.addEventListener('keydown', e => {
     if (!isWeb()) window.api.quit()
   }
 
-  if (e.key === ' ' && !e.target.matches('input, textarea, select')) {
+  if (isPlaybackShortcut) {
     e.preventDefault()
     _togglePlayback()
   }
 })
 
 btnPlay.addEventListener('click', _togglePlayback)
+
+volumeSlider?.addEventListener('input', e => _setPlaybackVolume(e.target.value / 100))
+btnVolume?.addEventListener('click', () => {
+  const current = Number(volumeSlider?.value || 0) / 100
+  _setPlaybackVolume(current > 0 ? 0 : 1)
+})
 
 // ─── Fullscreen ──────────────────────────────────────────────────────────────
 function _toggleFullscreen() {
@@ -604,6 +660,7 @@ function _toggleFullscreen() {
 
 document.addEventListener('fullscreenchange', () => {
   const isFs = !!document.fullscreenElement
+  document.body.classList.toggle('video-playmode', isFs)
   btnFullscreen?.querySelector('.icon-fs-enter')?.classList.toggle('hidden', isFs)
   btnFullscreen?.querySelector('.icon-fs-exit')?.classList.toggle('hidden', !isFs)
   btnFullscreen?.setAttribute('title', isFs ? 'Exit Fullscreen (F11)' : 'Toggle Fullscreen (F11)')
@@ -720,7 +777,7 @@ function _applySnapshot(snap) {
 }
 
 function _undo() {
-  if (_isInteractionBlocked()) return
+  if (_isInteractionBlocked('editor')) return
   const snap = historyManager.undo(_snapshotVS())
   if (!snap) return
   _applySnapshot(snap)
@@ -729,7 +786,7 @@ function _undo() {
 }
 
 function _redo() {
-  if (_isInteractionBlocked()) return
+  if (_isInteractionBlocked('editor')) return
   const snap = historyManager.redo(_snapshotVS())
   if (!snap) return
   _applySnapshot(snap)
@@ -970,7 +1027,7 @@ function _syncDomFromState(vs, es) {
 
 // ─── Project: save ────────────────────────────────────────────────────────────
 async function _saveProject() {
-  if (_isInteractionBlocked()) return
+  if (_isInteractionBlocked('session')) return
   const defaultPath = isWeb()
     ? (appState.fileName
         ? appState.fileName.replace(/\.[^.]+$/, '') + '.spulse'
@@ -1000,7 +1057,7 @@ async function _saveProject() {
 // Distinct from _saveProject(): does not touch _projectFilePath/dirty tracking, since
 // the exported file is a portable copy, not the user's currently-open project file.
 async function _exportProject() {
-  if (_isInteractionBlocked()) return
+  if (_isInteractionBlocked('session')) return
   const defaultPath = appState.fileName
     ? appState.fileName.replace(/\.[^.]+$/, '') + '.spulse'
     : 'project.spulse'
@@ -1087,7 +1144,7 @@ async function _applyProjectData(projectPath, data, { recordRecent = true, webOp
 
 // ─── Project: load ────────────────────────────────────────────────────────────
 async function _loadProject() {
-  if (_isInteractionBlocked()) return
+  if (_isInteractionBlocked('session')) return
   const result = await window.api.loadProject()
   if (!result) return   // user cancelled
   await _applyProjectData(result.filePath, result.data, { webOpened: isWeb() ? 'opened' : false })
@@ -1102,7 +1159,7 @@ async function _loadProject() {
 // (user-initiated via a dialog they just confirmed), this can arrive at any time, so
 // it checks for unsaved changes first — same confirm() pattern as _newSession().
 async function _openProjectFile({ filePath, data }) {
-  if (_isInteractionBlocked()) return
+  if (_isInteractionBlocked('session')) return
   if (_isDirty) {
     const name = filePath.replace(/.*[\\/]/, '')
     if (!confirm(`Discard unsaved changes and open "${name}"?`)) return
@@ -1118,7 +1175,7 @@ async function _openProjectFile({ filePath, data }) {
 // its dialog title and hint text (kept distinct for the same UX-clarity reason as
 // _exportProject() vs _saveProject()).
 async function _importProject() {
-  if (_isInteractionBlocked()) return false
+  if (_isInteractionBlocked('session')) return false
   const result = await window.api.importProject()
   if (!result) return false
   await _applyProjectData(result.filePath, result.data, { recordRecent: false, webOpened: isWeb() ? 'imported' : false })
@@ -1131,7 +1188,7 @@ async function _importProject() {
 // Also overwrites last-session.json immediately (not the debounced auto-save path)
 // so a relaunch right after reset doesn't restore the pre-reset state.
 function _resetToDefaults() {
-  if (_isInteractionBlocked()) return
+  if (_isInteractionBlocked('editor')) return
   const alreadyAtDefaults = isVisualizerStateAtDefaults() && isExportSettingsAtDefaults()
   resetExportSettingsToDefaults()
   resetVisualizerStateToDefaults()
@@ -1464,6 +1521,15 @@ if (_lastSession) {
   // exactly what was already saved. _clearDirty() after, matching how
   // _applyProjectData() ends every one of its own restore paths the same way.
   await _reloadAudioFromPath(_lastSessionAudioPath)
+  _clearDirty()
+  _updateTitleBar()
+} else if (isWeb()) {
+  // Browser refresh is a clean-session boundary: reset the model first, then
+  // sync every inspector control so stale browser state cannot leak into the UI.
+  resetVisualizerStateToDefaults()
+  resetExportSettingsToDefaults()
+  _syncDomFromState(visualizerState, exportSettings)
+  backgroundRenderer.reloadFromState(visualizerState.background)
   _clearDirty()
   _updateTitleBar()
 }

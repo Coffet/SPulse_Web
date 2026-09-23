@@ -283,6 +283,163 @@ body.studio-active {
   height: 32px;
 }
 
+/* ─── Export Mission icon + process menu ─────────────────────────────────── */
+.studio-mission-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.btn-mission-icon {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--color-accent);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.btn-mission-icon:hover,
+.btn-mission-icon.is-active {
+  background: var(--color-surface-hover);
+  border-color: var(--color-panel-border);
+}
+
+.btn-mission-icon.is-paused { color: #f5b642; }
+.btn-mission-icon.is-completed { color: #51d88a; }
+
+.mission-circular-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.mission-circle-bg { stroke: var(--color-surface-active); }
+.mission-circle-fg {
+  stroke: currentColor;
+  transition: stroke-dashoffset 180ms ease;
+}
+
+.mission-icon-inner {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  background: var(--color-panel-bg);
+  border-radius: 50%;
+}
+
+.mission-glyph { width: 12px; height: 12px; }
+
+.mission-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  display: grid;
+  place-items: center;
+  background: var(--color-accent);
+  color: var(--color-app-bg);
+  border: 2px solid var(--color-app-bg);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.export-process-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 300;
+  width: min(420px, calc(100vw - 24px));
+  overflow: hidden;
+  background: var(--color-panel-bg);
+  border: 1px solid var(--color-panel-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.42);
+}
+
+.export-menu-head,
+.export-menu-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--color-panel-border);
+}
+
+.export-menu-foot { border-top: 1px solid var(--color-panel-border); border-bottom: 0; }
+.export-menu-title-wrap { display: flex; align-items: center; gap: 8px; }
+.export-menu-title { font-size: 13px; font-weight: 650; color: var(--color-text-primary); }
+.export-menu-status-badge,
+.mission-item-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 6px;
+  border-radius: 999px;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-active);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.badge-active, .status-recording .mission-item-badge { color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 14%, transparent); }
+.badge-paused, .status-paused .mission-item-badge { color: #f5b642; background: rgba(245, 182, 66, 0.14); }
+.badge-done, .status-completed .mission-item-badge { color: #51d88a; background: rgba(81, 216, 138, 0.14); }
+
+.export-menu-head-actions { display: flex; align-items: center; gap: 8px; }
+.btn-text-xs, .btn-icon-xs {
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.btn-text-xs:hover, .btn-icon-xs:hover { color: var(--color-accent); }
+.btn-icon-xs { width: 22px; height: 22px; padding: 0; font-size: 13px; }
+
+.export-menu-list { max-height: min(440px, 60vh); overflow-y: auto; }
+.mission-item { padding: 12px 13px; border-bottom: 1px solid var(--color-panel-border); }
+.mission-item:last-child { border-bottom: 0; }
+.mission-item-header, .mission-item-meta { display: flex; align-items: center; justify-content: space-between; gap: 9px; }
+.mission-item-title { min-width: 0; overflow: hidden; color: var(--color-text-primary); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.mission-item-progress-track { height: 5px; margin: 9px 0 7px; overflow: hidden; background: var(--color-surface-active); border-radius: 999px; }
+.mission-item-progress-fill { height: 100%; background: var(--color-accent); border-radius: inherit; transition: width 180ms ease; }
+.status-paused .mission-item-progress-fill { background: #f5b642; }
+.status-completed .mission-item-progress-fill { background: #51d88a; }
+.mission-meta-info { min-width: 0; overflow: hidden; color: var(--color-text-muted); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.mission-item-actions { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.btn-xs { display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 3px 7px; border: 1px solid var(--color-panel-border); border-radius: var(--radius-sm); background: var(--color-surface-hover); color: var(--color-text-secondary); cursor: pointer; font: inherit; font-size: 10.5px; }
+.btn-xs:hover { color: var(--color-accent); border-color: var(--color-accent); }
+.btn-mission-cancel:hover { color: var(--color-destructive); border-color: var(--color-destructive); }
+.icon-xs { width: 11px; height: 11px; }
+.mission-queued-note { color: var(--color-text-muted); font-size: 10.5px; }
+.mission-empty-state { padding: 26px 14px; text-align: center; color: var(--color-text-muted); font-size: 12px; }
+.export-menu-opt { display: flex; align-items: center; gap: 7px; color: var(--color-text-secondary); font-size: 11px; cursor: pointer; }
+.export-menu-opt input { accent-color: var(--color-accent); }
+
+body.export-minimized #export-modal { display: none; }
+
+@media (max-width: 640px) {
+  .export-process-menu { right: -46px; }
+  .studio-topbar-actions { gap: 4px; }
+  .studio-export .btn-export { padding: 0 10px; }
+  .studio-export .btn-export .icon-sm { display: none; }
+}
+
 .studio-export {
   display: flex;
   flex-direction: column;
@@ -666,6 +823,58 @@ body.studio-active {
   height: 100%;
 }
 
+/* Canvas-only video play mode. The browser fullscreen API owns the viewport;
+   this class removes editor chrome while keeping the real canvas active. */
+body.video-playmode #studio {
+  width: 100vw;
+  height: 100vh;
+}
+
+body.video-playmode .studio-topbar,
+body.video-playmode .left-panel,
+body.video-playmode .right-panel,
+body.video-playmode .style-strip,
+body.video-playmode .transport-bar,
+body.video-playmode .panel-toggle {
+  display: none;
+}
+
+body.video-playmode .app-layout,
+body.video-playmode .center-panel,
+body.video-playmode .canvas-area,
+body.video-playmode .canvas-drop-zone {
+  width: 100%;
+  height: 100%;
+}
+
+body.video-playmode .app-layout {
+  display: block;
+}
+
+body.video-playmode .canvas-area {
+  padding: 0;
+}
+
+body.video-playmode .canvas-wrapper {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+}
+
+body.video-playmode .transport-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  background: color-mix(in srgb, var(--color-panel-bg) 88%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--color-panel-border) 85%, transparent);
+  backdrop-filter: blur(10px);
+}
+
 .canvas-wrapper.viz-draggable         { cursor: grab; }
 .canvas-wrapper.viz-draggable.viz-dragging { cursor: grabbing; }
 
@@ -784,6 +993,33 @@ body.studio-active {
   flex-shrink: 0;
 }
 
+.volume-control {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.volume-button {
+  flex-shrink: 0;
+}
+
+.volume-slider {
+  width: 76px;
+  height: 4px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.volume-slider:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .volume-slider { width: 54px; }
+}
+
 .time-label {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -801,6 +1037,12 @@ body.studio-active {
   background: var(--color-surface-active);
   border-radius: 999px;
   cursor: pointer;
+  touch-action: none;
+}
+
+.scrubber-track:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
 }
 
 .scrubber-fill {

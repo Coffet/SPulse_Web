@@ -161,6 +161,56 @@
           <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
         </svg>
       </button>
+
+      <!-- Mission Icon & Export Process Menu (Top Bar) -->
+      <div class="studio-mission-wrap hidden" id="studio-mission-wrap">
+        <button class="btn-mission-icon" id="btn-mission-icon" type="button" aria-label="Export Process" title="Export Process" aria-expanded="false" aria-haspopup="true">
+          <svg class="mission-circular-svg" viewBox="0 0 36 36" aria-hidden="true">
+            <circle class="mission-circle-bg" cx="18" cy="18" r="14" fill="none" stroke-width="2.5" />
+            <circle class="mission-circle-fg" id="mission-circle-fg" cx="18" cy="18" r="14" fill="none" stroke-width="2.5" stroke-dasharray="87.96" stroke-dashoffset="87.96" stroke-linecap="round" transform="rotate(-90 18 18)" />
+          </svg>
+          <span class="mission-icon-inner">
+            <svg class="mission-glyph glyph-active" id="mission-active-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 4v11M7 10l5 5 5-5"/>
+              <path d="M4 18h16"/>
+            </svg>
+            <svg class="mission-glyph glyph-paused hidden" id="mission-paused-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <rect x="6" y="5" width="4" height="14" rx="1"/>
+              <rect x="14" y="5" width="4" height="14" rx="1"/>
+            </svg>
+            <svg class="mission-glyph glyph-complete hidden" id="mission-complete-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </span>
+          <span class="mission-badge hidden" id="mission-count-badge"></span>
+        </button>
+
+        <!-- Dropdown Menu -->
+        <div class="export-process-menu hidden" id="export-process-menu" role="menu" aria-label="Export Process">
+          <div class="export-menu-head">
+            <div class="export-menu-title-wrap">
+              <span class="export-menu-title">Export Process</span>
+              <span class="export-menu-status-badge" id="export-menu-status-badge">1 active</span>
+            </div>
+            <div class="export-menu-head-actions">
+              <button class="btn-text-xs" id="mission-clear-btn" type="button" title="Clear completed exports">Clear</button>
+              <button class="btn-icon-xs" id="mission-close-menu-btn" type="button" title="Close menu" aria-label="Close menu">✕</button>
+            </div>
+          </div>
+
+          <div class="export-menu-list" id="mission-task-list">
+            <!-- Dynamically populated export tasks -->
+          </div>
+
+          <div class="export-menu-foot">
+            <label class="export-menu-opt" title="Export directly in background without opening the modal dialog">
+              <input type="checkbox" id="mission-opt-auto-minimize">
+              <span>Minimize dialog by default</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
       <div class="studio-export">
         <button class="btn btn-export" id="btn-export" disabled>
           <svg viewBox="0 0 20 20" fill="currentColor" class="icon-sm" aria-hidden="true"><path d="M10 2v10M5 7l5 5 5-5M3 15h14v2H3z"/></svg>
@@ -258,7 +308,7 @@
           <svg class="icon icon-pause hidden" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="3" width="4" height="18" rx="1"/><rect x="15" y="3" width="4" height="18" rx="1"/></svg>
         </button>
         <span class="time-label" id="time-current">0:00</span>
-        <div class="scrubber-track" id="scrubber-track">
+        <div class="scrubber-track" id="scrubber-track" role="slider" tabindex="0" aria-label="Audio position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="0:00">
           <div class="scrubber-fill"  id="scrubber-fill"></div>
           <div class="scrubber-thumb" id="scrubber-thumb"></div>
         </div>
@@ -271,6 +321,19 @@
             <path d="M9 3v3a2 2 0 0 1-2 2H4M15 3v3a2 2 0 0 0 2 2h3M9 21v-3a2 2 0 0 0-2-2H4M15 21v-3a2 2 0 0 1 2-2h3"/>
           </svg>
         </button>
+        <div class="volume-control" role="group" aria-label="Playback volume">
+          <button class="btn-icon-sm volume-button" id="btn-volume" type="button" title="Mute" aria-label="Mute">
+            <svg class="volume-icon volume-icon-high" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+              <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/>
+            </svg>
+            <svg class="volume-icon volume-icon-muted hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+              <path d="m23 9-6 6M17 9l6 6"/>
+            </svg>
+          </button>
+          <input id="volume-slider" class="volume-slider" type="range" min="0" max="100" value="100" step="1" aria-label="Playback volume" disabled>
+        </div>
       </div>
     </main>
 
@@ -696,8 +759,15 @@
 
   <!-- Export Progress Modal -->
   <div id="export-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
-    <div class="modal">
-      <h2 class="modal-title" id="export-modal-title">Exporting MP4…</h2>
+    <div class="modal export-modal-content">
+      <div class="modal-head">
+        <h2 class="modal-title" id="export-modal-title">Exporting MP4…</h2>
+        <button class="btn-icon-sm btn-modal-minimize" id="btn-export-minimize" type="button" title="Minimize to top bar" aria-label="Minimize to top bar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+      </div>
       <div class="progress-track">
         <div class="progress-fill" id="export-progress-fill"></div>
       </div>
@@ -705,6 +775,7 @@
       <p class="progress-eta"   id="export-progress-eta"></p>
       <div class="modal-actions">
         <button class="btn btn-secondary hidden" id="btn-open-folder">Open Folder</button>
+        <button class="btn btn-secondary" id="btn-modal-minimize-action" type="button">Minimize</button>
         <button class="btn btn-destructive" id="btn-export-cancel">Cancel Export</button>
         <button class="btn btn-secondary hidden" id="btn-export-close">Close</button>
       </div>

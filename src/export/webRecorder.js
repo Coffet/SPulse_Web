@@ -3,11 +3,13 @@
 // takes about 3 minutes. Desktop FFmpeg remains the fast MP4 path.
 
 import { progressModal }   from './progressModal.js'
-import { canvasEngine }    from '../visualizer/canvasEngine.js'
+import { CanvasEngine }    from '../visualizer/canvasEngine.js'
+import { AudioAnalyser }   from '../audio/audioAnalyser.js'
 import { exportSettings }  from './exportSettings.js'
 import { showErrorDialog } from '../ui/errorDialog.js'
 import { showConfirmDialog } from '../ui/confirmDialog.js'
 import { isWeb }           from '../platform/webApi.js'
+import { exportMissionManager } from './exportMissionManager.js'
 
 export const WEB_MAX_PIXELS = 1920 * 1080
 export const WEB_MAX_FPS    = 30
@@ -15,6 +17,9 @@ export const WEB_MAX_FPS    = 30
 const SILENCE_LEAD_MS = 120
 
 let _webExporting = false
+let _sharedCanvas = null
+let _sharedCanvasPromise = null
+const exportCanvasEngine = new CanvasEngine({ exportOnly: true })
 
 export function isWebExporting() {
   return _webExporting
@@ -46,20 +51,108 @@ function _sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+function _createExportAnalyser(audioLoader) {
+  const context = new AudioContext()
+  const sourceBuffer = audioLoader.audioBuffer
+  const buffer = context.createBuffer(
+    sourceBuffer.numberOfChannels,
+    sourceBuffer.length,
+    sourceBuffer.sampleRate,
+  )
+
+  for (let channel = 0; channel < sourceBuffer.numberOfChannels; channel++) {
+    buffer.copyToChannel(sourceBuffer.getChannelData(channel), channel)
+  }
+
+  const analyser = new AudioAnalyser(context)
+  analyser.setBuffer(buffer)
+  analyser.setOutputMuted(true)
+  return { analyser, context }
+}
+
+async function _acquireCanvasStream(w, h, fps, exportAnalyser) {
+  if (_sharedCanvas) {
+    _sharedCanvas.users++
+    return { stream: _sharedCanvas.stream, release: _releaseCanvasStream }
+  }
+
+  if (_sharedCanvasPromise) {
+    await _sharedCanvasPromise
+    return _acquireCanvasStream(w, h, fps, exportAnalyser)
+  }
+
+  let resolveReady
+  let rejectReady
+  _sharedCanvasPromise = new Promise((resolve, reject) => {
+    resolveReady = resolve
+    rejectReady = reject
+  })
+
+  try {
+    const exportCanvas = document.createElement('canvas')
+    exportCanvasEngine.initExport(window.appState, exportCanvas)
+    exportCanvasEngine.setExportResolution(w, h)
+    exportCanvasEngine.setExportAnalyser(exportAnalyser)
+    exportCanvasEngine.renderSyncFrame()
+    await _sleep(SILENCE_LEAD_MS)
+
+    const canvas = exportCanvasEngine.r2d?.canvas
+    if (!canvas) throw new Error('Canvas is not ready')
+
+    _sharedCanvas = {
+      stream: canvas.captureStream(fps),
+      users: 1,
+    }
+    resolveReady()
+    return { stream: _sharedCanvas.stream, release: _releaseCanvasStream }
+  } catch (error) {
+    rejectReady(error)
+    throw error
+  } finally {
+    _sharedCanvasPromise = null
+  }
+}
+
+function _releaseCanvasStream() {
+  if (!_sharedCanvas) return
+  _sharedCanvas.users--
+  if (_sharedCanvas.users > 0) return
+
+  _sharedCanvas.stream.getTracks().forEach(track => track.stop())
+  _sharedCanvas = null
+  exportCanvasEngine.stop()
+  exportCanvasEngine.setExportAnalyser(null)
+  exportCanvasEngine.clearExportData()
+  exportCanvasEngine.restorePreviewResolution()
+}
+
 export async function startWebExport() {
   const appState = window.appState
-  if (!appState?.loaded || _webExporting) return false
+  if (!appState?.loaded) return false
+
+  if (_webExporting) {
+    const settings = { ...exportSettings }
+    const duration = appState.audioLoader?.duration || 0
+    const totalFrames = Math.max(1, Math.ceil(duration * (settings.fps || 30)))
+    const filename = `${(appState.fileName || 'spulse').replace(/\.[^.]+$/, '')}-spulse.webm`
+    _runWebExport(appState, settings).finally(() => {
+      if (!exportMissionManager.hasActiveOrQueued()) _webExporting = false
+    })
+    return true
+  }
+
   _webExporting = true
   try {
     return await _runWebExport(appState)
   } finally {
-    _webExporting = false
+    if (!exportMissionManager.hasActiveOrQueued()) _webExporting = false
   }
 }
 
-async function _runWebExport(appState) {
+async function _runWebExport(appState, settingsSnapshot = null, existingTask = null) {
 
   if (document.visibilityState !== 'visible') {
+    if (existingTask) exportMissionManager.cancelTask(existingTask.id)
     showErrorDialog(
       'Keep window in foreground',
       'Browser recording only works while this tab/window is visible. Bring SPulse to the foreground and try export again.',
@@ -69,6 +162,7 @@ async function _runWebExport(appState) {
 
   const mime = pickRecorderMime()
   if (!mime) {
+    if (existingTask) exportMissionManager.cancelTask(existingTask.id)
     showErrorDialog(
       'Export not supported',
       'This browser cannot record canvas video. Try Chrome or Edge, or export a .spulse project and encode MP4 in the desktop app.',
@@ -76,9 +170,11 @@ async function _runWebExport(appState) {
     return false
   }
 
-  capWebExport(exportSettings)
-  const { width: w, height: h, fps } = exportSettings
-  const { audioLoader, analyser } = appState
+  const settings = settingsSnapshot || exportSettings
+  capWebExport(settings)
+  const { width: w, height: h, fps } = settings
+  const { audioLoader } = appState
+  const { analyser: exportAnalyser, context: exportAudioContext } = _createExportAnalyser(audioLoader)
   const duration = audioLoader.duration
   const totalFrames = Math.max(1, Math.ceil(duration * fps))
 
@@ -90,29 +186,58 @@ async function _runWebExport(appState) {
       confirmLabel: 'Continue',
       cancelLabel: 'Cancel',
     })
-    if (!ok) return false
+    if (!ok) {
+      exportAudioContext.close().catch(() => {})
+      if (existingTask) exportMissionManager.cancelTask(existingTask.id)
+      return false
+    }
   }
 
   const btnExport = document.getElementById('btn-export')
-  const btnPlay   = document.getElementById('btn-play-pause')
-  if (btnExport) btnExport.disabled = true
-  if (btnPlay)   btnPlay.disabled   = true
 
   let cancelled = false
   let cancelReason = ''
   let rec = null
   let dest = null
   let canvasStream = null
-  const prevOnEnded = analyser.onEnded
+  let releaseCanvas = null
   const chunks = []
+  const missionTask = existingTask || exportMissionManager.registerTask({
+    title: `${appState.fileName || 'Visualizer'} export`,
+    filename: `${(appState.fileName || 'spulse').replace(/\.[^.]+$/, '')}-spulse.webm`,
+    totalFrames,
+  })
+  let pausedAt = 0
+  let paused = false
+
+  const pauseRecording = () => {
+    if (cancelled || paused || !rec || rec.state !== 'recording') return
+    paused = true
+    pausedAt = exportAnalyser.currentTime
+    try { rec.pause() } catch { return }
+    exportAnalyser.pause()
+  }
+
+  const resumeRecording = () => {
+    if (cancelled || !paused || !rec || rec.state !== 'paused') return
+    paused = false
+    try { rec.resume() } catch { return }
+    exportAnalyser.seek(pausedAt)
+    exportAnalyser.play()
+  }
 
   const cancelRecording = (reason = 'user') => {
     cancelled = true
     cancelReason = reason
     try { rec?.state === 'recording' && rec.stop() } catch { /* ignore */ }
-    analyser.stop()
-    canvasEngine.stop()
+    exportAnalyser.stop()
   }
+
+  exportMissionManager.setTaskController(missionTask.id, {
+    pause: pauseRecording,
+    resume: resumeRecording,
+    cancel: () => cancelRecording('user'),
+  })
 
   const onVisibilityChange = () => {
     if (document.visibilityState === 'hidden' && !cancelled) {
@@ -121,10 +246,7 @@ async function _runWebExport(appState) {
   }
 
   const cleanupGraph = () => {
-    try { dest && analyser.analyserNode.disconnect(dest) } catch { /* already disconnected */ }
-    try { analyser.analyserNode.connect(analyser.audioContext.destination) } catch { /* ignore */ }
-    canvasStream?.getTracks().forEach(t => t.stop())
-    analyser.onEnded = prevOnEnded
+    try { dest && exportAnalyser.analyserNode.disconnect(dest) } catch { /* already disconnected */ }
   }
 
   progressModal.init(() => {
@@ -138,26 +260,16 @@ async function _runWebExport(appState) {
   document.addEventListener('visibilitychange', onVisibilityChange)
 
   try {
-    if (analyser.isPlaying) analyser.stop()
-    analyser.seek(0)
-    analyser.setOutputMuted?.(true)
-    if (analyser.audioContext.state === 'suspended') {
-      await analyser.audioContext.resume()
+    exportAnalyser.seek(0)
+    if (exportAnalyser.audioContext.state === 'suspended') {
+      await exportAnalyser.audioContext.resume()
     }
 
-    canvasEngine.setExportResolution(w, h)
-    canvasEngine.renderSyncFrame()
-    await _sleep(SILENCE_LEAD_MS)
-
-    const canvas = canvasEngine.r2d?.canvas
-    if (!canvas) throw new Error('Canvas is not ready')
-
-    canvasStream = canvas.captureStream(fps)
-    dest = analyser.audioContext.createMediaStreamDestination()
-    analyser.analyserNode.connect(dest)
-
-    // Mute speakers during recording by disconnecting the speakers destination
-    try { analyser.analyserNode.disconnect(analyser.audioContext.destination) } catch {}
+    const canvasLease = await _acquireCanvasStream(w, h, fps, exportAnalyser)
+    canvasStream = canvasLease.stream
+    releaseCanvas = canvasLease.release
+    dest = exportAnalyser.audioContext.createMediaStreamDestination()
+    exportAnalyser.analyserNode.connect(dest)
 
     const tracks = [
       ...canvasStream.getVideoTracks(),
@@ -177,16 +289,22 @@ async function _runWebExport(appState) {
     })
 
     const ended = new Promise(resolve => {
-      analyser.onEnded = resolve
+      exportAnalyser.onEnded = resolve
     })
 
     rec.start(500)
-    analyser.play()
-    canvasEngine.start()
+    exportAnalyser.play()
+    if (_sharedCanvas?.users === 1) exportCanvasEngine.start()
 
     const tick = setInterval(() => {
-      const t = analyser.currentTime
-      progressModal.update(Math.min(totalFrames, Math.floor(t * fps)), totalFrames)
+      const t = exportAnalyser.currentTime
+      const progress = progressModal.update(Math.min(totalFrames, Math.floor(t * fps)), totalFrames)
+      exportMissionManager.updateProgress(missionTask.id, {
+        framesDone: Math.min(totalFrames, Math.floor(t * fps)),
+        totalFrames,
+        etaText: progress.etaText || (paused ? 'Paused' : 'Recording…'),
+        rateFps: progress.rate,
+      })
     }, 250)
 
     await Promise.race([
@@ -200,11 +318,11 @@ async function _runWebExport(appState) {
     clearInterval(tick)
 
     if (rec.state === 'recording') rec.stop()
-    analyser.stop()
-    canvasEngine.stop()
+    exportAnalyser.stop()
     await stopped
 
     if (cancelled) {
+      exportMissionManager.cancelTask(missionTask.id)
       progressModal.hide()
       if (cancelReason === 'background') {
         showErrorDialog(
@@ -222,8 +340,10 @@ async function _runWebExport(appState) {
     const filename = `${base}-spulse.webm`
     window.api.downloadBlob?.(blob, filename)
     progressModal.complete(filename)
+    exportMissionManager.completeTask(missionTask.id, { filename, blob })
     return true
   } catch (err) {
+    exportMissionManager.cancelTask(missionTask.id)
     progressModal.hide()
     showErrorDialog('Export Error', err.message || String(err))
     console.error('Web export error:', err)
@@ -231,11 +351,10 @@ async function _runWebExport(appState) {
   } finally {
     document.removeEventListener('visibilitychange', onVisibilityChange)
     cleanupGraph()
-    analyser.setOutputMuted?.(false)
-    canvasEngine.clearExportData()
-    canvasEngine.restorePreviewResolution()
-    if (btnExport) btnExport.disabled = false
-    if (btnPlay)   btnPlay.disabled   = false
+    exportAnalyser.stop()
+    exportAnalyser.onEnded = null
+    exportAudioContext.close().catch(() => {})
+    releaseCanvas?.()
   }
 }
 
