@@ -302,7 +302,7 @@ async function _runWebExport(appState, settingsSnapshot = null, existingTask = n
       exportMissionManager.updateProgress(missionTask.id, {
         framesDone: Math.min(totalFrames, Math.floor(t * fps)),
         totalFrames,
-        etaText: progress.etaText || (paused ? 'Paused' : 'Recording…'),
+        etaText: progress.etaText || (paused ? 'Paused' : 'Exporting…'),
         rateFps: progress.rate,
       })
     }, 250)
@@ -338,9 +338,12 @@ async function _runWebExport(appState, settingsSnapshot = null, existingTask = n
 
     const base = (appState.fileName || 'spulse').replace(/\.[^.]+$/, '')
     const filename = `${base}-spulse.webm`
+    // Hand the finished file straight to the browser — this IS the delivery
+    // step, so the mission menu deliberately offers no re-save action and the
+    // Blob is not passed on to be retained.
     window.api.downloadBlob?.(blob, filename)
     progressModal.complete(filename)
-    exportMissionManager.completeTask(missionTask.id, { filename, blob })
+    exportMissionManager.completeTask(missionTask.id, { filename })
     return true
   } catch (err) {
     exportMissionManager.cancelTask(missionTask.id)

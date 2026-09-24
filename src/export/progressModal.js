@@ -1,4 +1,10 @@
-// Export progress modal — shown during the FFmpeg / Web export pipeline.
+// Export progress tracker — driven by the FFmpeg / Web export pipeline.
+//
+// The old `#export-modal` dialog markup is commented out in index.html: the
+// Export Process menu (`#studio-mission-wrap`, exportMissionManager.js) is now
+// the only export UI, so this module is a state-only progress reporter that
+// always runs in "minimized" mode. Every DOM lookup below is optional (`?.`)
+// because those elements no longer exist in the document.
 import { exportMissionManager } from './exportMissionManager.js'
 
 export const progressModal = {
@@ -30,6 +36,9 @@ export const progressModal = {
   },
 
   init(onCancel) {
+    // All of these are null now that `#export-modal` is commented out; the
+    // guards below keep the bindings safe no-ops. Cancelling is owned by the
+    // mission menu (task.controller.cancel()), not by a dialog button.
     this._overlay  = document.getElementById('export-modal')
     this._fill     = document.getElementById('export-progress-fill')
     this._stats    = document.getElementById('export-progress-stats')
@@ -58,6 +67,10 @@ export const progressModal = {
     return this._isMinimized
   },
 
+  // NOTE: minimize() / restore() used to toggle the `#export-modal` dialog.
+  // That markup is commented out in index.html, so only the minimized state
+  // survives and restore() is intentionally a no-op kept for call-site parity.
+
   minimize() {
     this._isMinimized = true
     this._overlay?.classList.add('hidden')
@@ -67,12 +80,8 @@ export const progressModal = {
   },
 
   restore() {
-    if (window.api?.platform === 'web') return
-    this._isMinimized = false
-    this._overlay?.classList.remove('hidden')
-    document.body.classList.remove('export-minimized')
-    document.body.classList.add('exporting')
-    exportMissionManager.setModalMinimized(false)
+    // Nothing to restore — the Export Process menu owns the export UI now.
+    return
   },
 
   show(totalFrames, opts = {}) {
@@ -85,20 +94,10 @@ export const progressModal = {
     document.getElementById('btn-export-close')?.classList.add('hidden')
     document.getElementById('btn-open-folder')?.classList.add('hidden')
 
-    const autoMin = window.api?.platform === 'web' || exportMissionManager.isAutoMinimizeEnabled()
-    if (autoMin) {
-      this._isMinimized = true
-      this._overlay?.classList.add('hidden')
-      document.body.classList.remove('exporting')
-      document.body.classList.add('export-minimized')
-      exportMissionManager.setModalMinimized(true)
-    } else {
-      this._isMinimized = false
-      document.body.classList.remove('export-minimized')
-      document.body.classList.add('exporting')
-      this._overlay?.classList.remove('hidden')
-      exportMissionManager.setModalMinimized(false)
-    }
+    // The dialog is commented out, so there is no "shown" state to enter —
+    // progress is always surfaced by the Export Process menu.
+    // (Previously: `autoMin = platform === 'web' || isAutoMinimizeEnabled()`.)
+    this.minimize()
 
     this.update(0, totalFrames)
   },
@@ -108,7 +107,7 @@ export const progressModal = {
     if (this._fill)  this._fill.style.width = `${pct}%`
 
     const statText = this._realtime
-      ? `Recording ${pct}% — this matches the length of the song`
+      ? `Exporting ${pct}% — this matches the length of the song`
       : `Frame ${framesDone} / ${totalFrames} — ${pct}%`
 
     if (this._stats) {

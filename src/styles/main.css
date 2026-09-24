@@ -59,6 +59,14 @@ html[data-theme="dark"] {
   --color-text-muted:     oklch(0.60 0.02 275);
   --color-destructive:    oklch(0.68 0.17 32);
 
+  /* Export task status — paused / completed. Tinted toward the app hue (275)
+     so they sit in the same family as accent and destructive rather than
+     reading as borrowed traffic-light colors. */
+  --color-warn:      oklch(0.80 0.13 79);
+  --color-warn-dim:  oklch(0.80 0.13 79 / 0.15);
+  --color-ok:        oklch(0.79 0.15 158);
+  --color-ok-dim:    oklch(0.79 0.15 158 / 0.15);
+
   --color-canvas-bg: oklch(0.15 0.02 275);
   --color-drop-veil: oklch(0.18 0.025 275 / 0.88);
 }
@@ -80,6 +88,13 @@ html[data-theme="light"] {
   --color-text-secondary: oklch(0.42 0.025 275);
   --color-text-muted:     oklch(0.52 0.02 275);
   --color-destructive:    oklch(0.55 0.18 32);
+
+  /* Darkened against the light panel so they stay legible as badge text —
+     measured 4.7:1 (paused) and 4.9:1 (done). */
+  --color-warn:      oklch(0.50 0.13 62);
+  --color-warn-dim:  oklch(0.50 0.13 62 / 0.13);
+  --color-ok:        oklch(0.47 0.13 158);
+  --color-ok-dim:    oklch(0.47 0.13 158 / 0.13);
 
   --color-canvas-bg: oklch(0.92 0.014 275);
   --color-drop-veil: oklch(0.99 0.006 275 / 0.88);
@@ -160,7 +175,12 @@ body.studio-active {
 /* ─── Studio top bar ─────────────────────────────────────────────────────── */
 .studio-topbar {
   position: relative;
-  z-index: 6;
+  /* Above the panel toggle tabs (z-index 10, 11 on web). The top bar creates a
+     stacking context, so its dropdown menus — File/Edit/Help and the Export
+     Process menu — can only paint as high as this value; at 6 the toggles
+     clipped their lower-right corner. Kept below the video-mode transport bar
+     (20) and the modal overlays (200), which must still cover the top bar. */
+  z-index: 12;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -311,8 +331,13 @@ body.studio-active {
   border-color: var(--color-panel-border);
 }
 
-.btn-mission-icon.is-paused { color: #f5b642; }
-.btn-mission-icon.is-completed { color: #51d88a; }
+/* Menu-open ring, tinted from the icon's own state colour so it stays in sync
+   when the task is paused or finished. */
+.btn-mission-icon.is-active { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); }
+
+/* Same status colours as the cards inside the menu. */
+.btn-mission-icon.is-paused { color: var(--color-warn); }
+.btn-mission-icon.is-completed { color: var(--color-ok); }
 
 .mission-circular-svg {
   position: absolute;
@@ -363,12 +388,19 @@ body.studio-active {
   top: calc(100% + 8px);
   right: 0;
   z-index: 300;
-  width: min(420px, calc(100vw - 24px));
+  width: min(400px, calc(100vw - 24px));
   overflow: hidden;
   background: var(--color-panel-bg);
   border: 1px solid var(--color-panel-border);
-  border-radius: var(--radius-md);
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.42);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 2px oklch(0.12 0.03 275 / 0.30), 0 18px 46px oklch(0.12 0.03 275 / 0.42);
+  transform-origin: top right;
+  animation: mission-menu-in 140ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes mission-menu-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
 }
 
 .export-menu-head,
@@ -376,62 +408,221 @@ body.studio-active {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 11px 13px;
+  gap: 10px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--color-panel-border);
 }
 
+/* Only used when a footer is present — the "Minimize dialog by default" option
+   that lived here is commented out in index.html along with the dialog. */
 .export-menu-foot { border-top: 1px solid var(--color-panel-border); border-bottom: 0; }
+
+.export-menu-head {
+  background: color-mix(in srgb, var(--color-surface-hover) 60%, var(--color-panel-bg));
+}
+
 .export-menu-title-wrap { display: flex; align-items: center; gap: 8px; }
-.export-menu-title { font-size: 13px; font-weight: 650; color: var(--color-text-primary); }
+.export-menu-title { font-size: 12.5px; font-weight: 650; color: var(--color-text-primary); letter-spacing: 0.01em; }
+
 .export-menu-status-badge,
 .mission-item-badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 6px;
+  gap: 5px;
+  padding: 3px 8px 3px 7px;
   border-radius: 999px;
-  color: var(--color-text-secondary);
   background: var(--color-surface-active);
-  font-size: 10px;
-  font-weight: 650;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.badge-active, .status-recording .mission-item-badge { color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 14%, transparent); }
-.badge-paused, .status-paused .mission-item-badge { color: #f5b642; background: rgba(245, 182, 66, 0.14); }
-.badge-done, .status-completed .mission-item-badge { color: #51d88a; background: rgba(81, 216, 138, 0.14); }
+/* The header badge picks its own colour; a card badge must NOT, or it would
+   override the status colour it inherits from `.mission-item.status-*`. */
+.export-menu-status-badge { color: var(--color-text-secondary); }
 
-.export-menu-head-actions { display: flex; align-items: center; gap: 8px; }
+/* Leading status dot. Its colour is `currentColor`, so each state is readable
+   by shape as well as hue. */
+.export-menu-status-badge::before,
+.mission-item-badge::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.export-menu-status-badge.badge-active { color: var(--color-accent);         background: var(--color-accent-dim); }
+.export-menu-status-badge.badge-paused { color: var(--color-warn);           background: var(--color-warn-dim); }
+.export-menu-status-badge.badge-queued { color: var(--color-text-secondary); background: var(--color-surface-active); }
+.export-menu-status-badge.badge-done   { color: var(--color-ok);             background: var(--color-ok-dim); }
+
+.export-menu-head-actions { display: flex; align-items: center; gap: 4px; }
 .btn-text-xs, .btn-icon-xs {
   border: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
   font: inherit;
   font-size: 11px;
+  transition: color var(--transition-fast), background var(--transition-fast), opacity var(--transition-fast);
 }
-.btn-text-xs:hover, .btn-icon-xs:hover { color: var(--color-accent); }
-.btn-icon-xs { width: 22px; height: 22px; padding: 0; font-size: 13px; }
+.btn-text-xs { padding: 4px 7px; }
+.btn-icon-xs { width: 24px; height: 24px; padding: 0; font-size: 12px; line-height: 1; }
+.btn-text-xs:hover, .btn-icon-xs:hover { color: var(--color-accent); background: var(--color-accent-dim); }
+.btn-text-xs:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-text-xs:disabled:hover { color: var(--color-text-muted); background: transparent; }
 
-.export-menu-list { max-height: min(440px, 60vh); overflow-y: auto; }
-.mission-item { padding: 12px 13px; border-bottom: 1px solid var(--color-panel-border); }
+/* Show 4 task cards, then scroll. All cards are the same height — 13px/12px
+   padding + header + progress block + 26px (.btn-xs) action row + divider,
+   measured at ~94.5px each (4 cards occupy 378px of content). `overflow-y:
+   auto` therefore only draws a scrollbar once a 5th card exists. The +2px
+   tolerance absorbs subpixel rounding and font-metric drift; the trade-off is
+   a ~2px peek of the next card, which usefully hints that the list scrolls.
+   The 60vh cap keeps the menu inside short windows, where
+   `.export-process-menu`'s own `overflow: hidden` would otherwise clip the
+   list with no way to reach the rest.
+   Re-measure both numbers if the card layout changes. */
+.export-menu-list {
+  --mission-card-h: 95px;
+  max-height: min(calc(4 * var(--mission-card-h) + 2px), 60vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-panel-border) transparent;
+}
+/* Mirrors .panel-body's scrollbar treatment. Note `scrollbar-width: thin` above
+   takes precedence over these in Chromium (measured gutter: 10px, not 4px) —
+   kept for parity with the panel scrollbars. */
+.export-menu-list::-webkit-scrollbar { width: 4px; }
+.export-menu-list::-webkit-scrollbar-track { background: transparent; }
+.export-menu-list::-webkit-scrollbar-thumb { background: var(--color-panel-border); border-radius: 2px; }
+
+.mission-item {
+  padding: 13px 14px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-panel-border) 62%, transparent);
+  transition: background var(--transition-fast);
+}
 .mission-item:last-child { border-bottom: 0; }
+.mission-item:hover { background: color-mix(in srgb, var(--color-surface-hover) 45%, transparent); }
+
+/* Each status sets one colour; the badge tint and progress fill both derive
+   from it via currentColor, so a status only has to be defined once.
+   These values are also badge *text*, so they must clear 4.5:1 against their
+   own 15% tint — hence secondary (not muted) for the inactive states. */
+.mission-item.status-recording { color: var(--color-accent); }
+.mission-item.status-paused    { color: var(--color-warn); }
+.mission-item.status-completed { color: var(--color-ok); }
+.mission-item.status-queued,
+.mission-item.status-cancelled { color: var(--color-text-secondary); }
+
+/* Dimmed, but not so far that the badge stops being readable. */
+.mission-item.status-cancelled { opacity: 0.75; }
+.mission-item.status-cancelled:hover { opacity: 1; }
+
 .mission-item-header, .mission-item-meta { display: flex; align-items: center; justify-content: space-between; gap: 9px; }
-.mission-item-title { min-width: 0; overflow: hidden; color: var(--color-text-primary); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.mission-item-progress-track { height: 5px; margin: 9px 0 7px; overflow: hidden; background: var(--color-surface-active); border-radius: 999px; }
-.mission-item-progress-fill { height: 100%; background: var(--color-accent); border-radius: inherit; transition: width 180ms ease; }
-.status-paused .mission-item-progress-fill { background: #f5b642; }
-.status-completed .mission-item-progress-fill { background: #51d88a; }
-.mission-meta-info { min-width: 0; overflow: hidden; color: var(--color-text-muted); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.mission-item-title { min-width: 0; overflow: hidden; color: var(--color-text-primary); font-size: 12.5px; font-weight: 600; letter-spacing: -0.005em; text-overflow: ellipsis; white-space: nowrap; }
+/* Inherits the status colour set on the card, so the badge tint always matches
+   the progress fill without a rule per status. */
+.mission-item-badge { color: inherit; background: color-mix(in srgb, currentColor 15%, transparent); }
+
+.mission-item-progress-track {
+  position: relative;
+  height: 4px;
+  margin: 10px 0 9px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-surface-active) 75%, transparent);
+  border-radius: 999px;
+}
+.mission-item-progress-fill {
+  height: 100%;
+  background: currentColor;
+  border-radius: inherit;
+  transition: width 180ms linear;
+}
+
+/* A queued task has no progress to show, so the empty track gets a slow sweep
+   to say "waiting", not "stalled". Motion is neutralised globally by the
+   prefers-reduced-motion block at the end of this file. */
+.mission-item.status-queued .mission-item-progress-track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-text-muted) 45%, transparent), transparent);
+  animation: mission-queued-sweep 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+@keyframes mission-queued-sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+
+.mission-meta-info {
+  min-width: 0;
+  overflow: hidden;
+  /* Secondary rather than muted: this is 10px, so it needs the contrast. The
+     hierarchy still reads because of the size, weight and mono family. */
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .mission-item-actions { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
-.btn-xs { display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 3px 7px; border: 1px solid var(--color-panel-border); border-radius: var(--radius-sm); background: var(--color-surface-hover); color: var(--color-text-secondary); cursor: pointer; font: inherit; font-size: 10.5px; }
-.btn-xs:hover { color: var(--color-accent); border-color: var(--color-accent); }
-.btn-mission-cancel:hover { color: var(--color-destructive); border-color: var(--color-destructive); }
+
+.btn-xs {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 4px 9px;
+  border: 1px solid var(--color-panel-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 550;
+  transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+}
+.btn-xs:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface-active);
+  border-color: color-mix(in srgb, var(--color-panel-border) 55%, var(--color-text-secondary));
+}
+.btn-xs:active { transform: translateY(0.5px); }
+.btn-xs:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-xs:disabled:hover { color: var(--color-text-secondary); background: var(--color-surface-hover); border-color: var(--color-panel-border); }
+
+/* Cancel stops a job that is still running, so it reads destructive on hover. */
+.btn-mission-cancel:hover { color: var(--color-destructive); border-color: var(--color-destructive); background: color-mix(in srgb, var(--color-destructive) 12%, transparent); }
+
 .icon-xs { width: 11px; height: 11px; }
-.mission-queued-note { color: var(--color-text-muted); font-size: 10.5px; }
-.mission-empty-state { padding: 26px 14px; text-align: center; color: var(--color-text-muted); font-size: 12px; }
+.mission-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 30px 16px;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+.mission-empty-state svg { width: 18px; height: 18px; opacity: 0.55; margin-bottom: 5px; }
+.mission-empty-title { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); }
+.mission-empty-sub { font-size: 11px; }
 .export-menu-opt { display: flex; align-items: center; gap: 7px; color: var(--color-text-secondary); font-size: 11px; cursor: pointer; }
 .export-menu-opt input { accent-color: var(--color-accent); }
 
+/* Dead rule — `#export-modal` is commented out in index.html.
 body.export-minimized #export-modal { display: none; }
+*/
 
 @media (max-width: 640px) {
   .export-process-menu { right: -46px; }
@@ -1211,8 +1402,15 @@ body.video-playmode .transport-bar {
   backdrop-filter: blur(3px);
 }
 
-/* Export recording is real-time and advances frames on the preview canvas.
-   Use an opaque backdrop so that motion isn't visible behind the modal. */
+/* Export dialog styles — dead while `#export-modal` is commented out in
+   index.html. progressModal.js no longer sets `body.exporting` (it always runs
+   minimized and hands progress to the Export Process menu), so these rules
+   only hide the canvas for a dialog that can no longer be shown.
+   To restore: uncomment alongside the markup.
+
+   Export recording is real-time and advances frames on the preview canvas.
+   Use an opaque backdrop so that motion isn't visible behind the modal.
+
 #export-modal.modal-overlay {
   background: rgba(13, 17, 23, 0.94);
   backdrop-filter: none;
@@ -1229,6 +1427,7 @@ body.exporting #transport-bar {
   pointer-events: none;
 }
 
+*/
 .modal {
   background: var(--color-panel-bg);
   border: 1px solid var(--color-panel-border);

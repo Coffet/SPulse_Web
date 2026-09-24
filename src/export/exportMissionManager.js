@@ -10,6 +10,15 @@ import { progressModal } from './progressModal.js'
 const CIRCUMFERENCE = 87.964 // 2 * PI * 14
 const STORAGE_KEY_AUTO_MINIMIZE = 'spulse_export_auto_minimize'
 
+// Task-card action icons, drawn at 11px by .icon-xs. Same stroke weight and
+// rounded caps as the rest of the studio icons.
+const ICON = {
+  pause:  '<svg viewBox="0 0 16 16" fill="currentColor" class="icon-xs" aria-hidden="true"><rect x="3" y="2" width="3" height="12" rx="1"/><rect x="10" y="2" width="3" height="12" rx="1"/></svg>',
+  resume: '<svg viewBox="0 0 16 16" fill="currentColor" class="icon-xs" aria-hidden="true"><path d="M4 2v12l10-6z"/></svg>',
+  stop:   '<svg viewBox="0 0 16 16" fill="currentColor" class="icon-xs" aria-hidden="true"><rect x="4.5" y="4.5" width="7" height="7" rx="1.5"/></svg>',
+  close:  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="icon-xs" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>',
+}
+
 class ExportMissionManager {
   constructor() {
     this.tasks = []
@@ -44,6 +53,10 @@ class ExportMissionManager {
     this._badgeEl     = document.getElementById('export-menu-status-badge')
     this._clearBtn    = document.getElementById('mission-clear-btn')
     this._closeMenuBtn= document.getElementById('mission-close-menu-btn')
+    // The "Minimize dialog by default" control is commented out in index.html
+    // (there is no export dialog left to minimize), so `_optMinimize` is null
+    // and the bindings below stay inert. `_autoMinimize` is retained only so
+    // the stored preference survives if the control returns.
     this._optMinimize = document.getElementById('mission-opt-auto-minimize')
 
     if (isWeb()) this._optMinimize?.closest('.export-menu-opt')?.classList.add('hidden')
@@ -114,13 +127,14 @@ class ExportMissionManager {
           case 'cancel':
             this.cancelTask(taskId)
             break
-          case 'dialog':
-            progressModal.restore()
-            this.closeMenu()
-            break
-          case 'download':
-            this.downloadTask(taskId)
-            break
+          // 'dialog' action removed — it called progressModal.restore() to
+          // re-open `#export-modal`, which is commented out in index.html.
+          // case 'dialog':
+          //   progressModal.restore()
+          //   this.closeMenu()
+          //   break
+          // 'download' action removed — the web export auto-downloads the file
+          // on completion, so there is nothing to re-save from the menu.
           case 'dismiss':
             this.dismissTask(taskId)
             break
@@ -193,7 +207,6 @@ class ExportMissionManager {
       rateFps: null,
       controller: controller || {},
       startFn: startFn || null,
-      blob: null,
       createdAt: Date.now(),
     }
 
@@ -250,7 +263,7 @@ class ExportMissionManager {
     task.controller?.resume?.()
     this._syncTopBarIcon()
     this._renderTaskList()
-    progressModal.setMessage('Recording…')
+    progressModal.setMessage('Exporting…')
   }
 
   cancelTask(taskId) {
@@ -281,7 +294,10 @@ class ExportMissionManager {
     }
   }
 
-  completeTask(taskId, { filename, blob }) {
+  // `filename` only — the file itself is not retained. The web export triggers
+  // the browser download as soon as recording stops, so holding a finished
+  // video Blob here would just pin hundreds of MB for the rest of the session.
+  completeTask(taskId, { filename } = {}) {
     const task = this.tasks.find(t => t.id === taskId)
     if (!task) return
 
@@ -289,7 +305,6 @@ class ExportMissionManager {
     task.progress = 1
     task.framesDone = task.totalFrames
     task.etaText = 'Completed ✓'
-    if (blob) task.blob = blob
     if (filename) task.filename = filename
 
     if (this.activeTaskId === taskId) {
@@ -299,12 +314,6 @@ class ExportMissionManager {
 
     this._syncTopBarIcon()
     this._renderTaskList()
-  }
-
-  downloadTask(taskId) {
-    const task = this.tasks.find(t => t.id === taskId)
-    if (!task?.blob) return
-    window.api?.downloadBlob?.(task.blob, task.filename || 'spulse.webm')
   }
 
   dismissTask(taskId) {
@@ -415,6 +424,33 @@ class ExportMissionManager {
 
   // ─── Dropdown Menu Rendering ────────────────────────────────────────────────
 
+  // Text for the card badge — the *only* place a task's status is stated.
+  // "Exporting" rather than "Recording": it describes both the web
+  // MediaRecorder path and the desktop FFmpeg frame render. The internal
+  // status value stays 'recording' (it is the MediaRecorder state).
+  _statusLabel(task) {
+    const pct = Math.round((task.progress || 0) * 100)
+    switch (task.status) {
+      case 'recording': return `Exporting ${pct}%`
+      case 'paused':    return `Paused ${pct}%`
+      case 'queued':    return 'Queued'
+      case 'completed': return 'Done'
+      case 'cancelled': return 'Cancelled'
+      default:          return ''
+    }
+  }
+
+  // Secondary line under the filename. Deliberately never repeats the badge:
+  // it carries an ETA / frame rate, or explains why a task is not running.
+  _metaText(task) {
+    if (task.status === 'completed' || task.status === 'cancelled') return ''
+    if (task.status === 'queued') return 'Starts when the current export finishes'
+    const raw = String(task.etaText || '').trim()
+    // Drop bare status restatements: 'Exporting…', 'Paused', 'Paused (67%)'.
+    const bareStatus = /^(exporting|recording|paused|queued|completed|cancelled)\b\s*(\(\d+%\))?\s*[✓…]*$/i
+    return bareStatus.test(raw) ? '' : raw
+  }
+
   _renderTaskList() {
     if (!this._listEl) return
 
@@ -442,10 +478,21 @@ class ExportMissionManager {
       }
     }
 
+    // "Clear" only does something once a task has finished, so say that.
+    if (this._clearBtn) {
+      const hasFinished = this.tasks.some(t => t.status === 'completed' || t.status === 'cancelled')
+      this._clearBtn.disabled = !hasFinished
+      this._clearBtn.title = hasFinished ? 'Clear finished exports' : 'Nothing finished yet'
+    }
+
     if (this.tasks.length === 0) {
       this._listEl.innerHTML = `
         <div class="mission-empty-state">
-          <p>No active exports</p>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 4v11M7 10l5 5 5-5"/><path d="M4 19h16"/>
+          </svg>
+          <p class="mission-empty-title">No exports yet</p>
+          <p class="mission-empty-sub">Exports you start will appear here.</p>
         </div>
       `
       return
@@ -456,67 +503,64 @@ class ExportMissionManager {
 
   _taskCardHtml(task) {
     const pct = Math.round((task.progress || 0) * 100)
-    let statusLabel = ''
-    let statusClass = ''
+    const statusLabel = this._statusLabel(task)
+    const metaText    = this._metaText(task)
+    const statusClass = `status-${task.status}`
     let actionsHtml = ''
 
+    // NOTE: the old "Details" button (data-action="dialog") has been removed.
+    // It only called progressModal.restore() to re-open `#export-modal`, which
+    // is commented out in index.html — the Export Process menu is the only
+    // export UI now, so there is no dialog to restore. Reference markup, kept
+    // in case the dialog is ever uncommented:
+    //
+    //   <button type="button" class="btn-xs btn-mission-dialog"
+    //           data-action="dialog" data-task-id="${task.id}"
+    //           title="Show progress dialog">Details</button>
+
     if (task.status === 'recording') {
-      statusLabel = `Recording ${pct}%`
-      statusClass = 'status-recording'
       actionsHtml = `
         <button type="button" class="btn-xs btn-mission-pause" data-action="pause" data-task-id="${task.id}" title="Pause export">
-          <svg viewBox="0 0 16 16" fill="currentColor" class="icon-xs" aria-hidden="true"><rect x="3" y="2" width="3" height="12" rx="1"/><rect x="10" y="2" width="3" height="12" rx="1"/></svg>
+          ${ICON.pause}
           Pause
         </button>
-        ${isWeb() ? '' : `<button type="button" class="btn-xs btn-mission-dialog" data-action="dialog" data-task-id="${task.id}" title="Show progress dialog">
-          Details
-        </button>`}
         <button type="button" class="btn-xs btn-mission-cancel" data-action="cancel" data-task-id="${task.id}" title="Cancel export">
+          ${ICON.stop}
           Cancel
         </button>
       `
     } else if (task.status === 'paused') {
-      statusLabel = `Paused (${pct}%)`
-      statusClass = 'status-paused'
       actionsHtml = `
         <button type="button" class="btn-xs btn-mission-resume" data-action="resume" data-task-id="${task.id}" title="Resume export">
-          <svg viewBox="0 0 16 16" fill="currentColor" class="icon-xs" aria-hidden="true"><path d="M4 2v12l10-6z"/></svg>
+          ${ICON.resume}
           Resume
         </button>
-        ${isWeb() ? '' : `<button type="button" class="btn-xs btn-mission-dialog" data-action="dialog" data-task-id="${task.id}" title="Show progress dialog">
-          Details
-        </button>`}
         <button type="button" class="btn-xs btn-mission-cancel" data-action="cancel" data-task-id="${task.id}" title="Cancel export">
+          ${ICON.stop}
           Cancel
         </button>
       `
     } else if (task.status === 'queued') {
-      statusLabel = 'Queued'
-      statusClass = 'status-queued'
       actionsHtml = `
-        <span class="mission-queued-note">Waiting to export…</span>
-        <button type="button" class="btn-xs btn-mission-cancel" data-action="cancel" data-task-id="${task.id}" title="Cancel queued export">
+        <button type="button" class="btn-xs btn-mission-cancel" data-action="cancel" data-task-id="${task.id}" title="Remove from queue">
+          ${ICON.stop}
           Cancel
         </button>
       `
     } else if (task.status === 'completed') {
-      statusLabel = 'Completed'
-      statusClass = 'status-completed'
+      // No "save again" button: the web export hands the file to the browser
+      // the moment it finishes (see webRecorder.js), so re-downloading would
+      // duplicate an action the user has already had happen.
       actionsHtml = `
-        ${task.blob ? `
-          <button type="button" class="btn-xs btn-mission-save" data-action="download" data-task-id="${task.id}" title="Save file again">
-            Save WebM
-          </button>
-        ` : ''}
-        <button type="button" class="btn-xs btn-mission-dismiss" data-action="dismiss" data-task-id="${task.id}" title="Dismiss">
+        <button type="button" class="btn-xs btn-mission-dismiss" data-action="dismiss" data-task-id="${task.id}" title="Remove from list">
+          ${ICON.close}
           Dismiss
         </button>
       `
     } else if (task.status === 'cancelled') {
-      statusLabel = 'Cancelled'
-      statusClass = 'status-cancelled'
       actionsHtml = `
-        <button type="button" class="btn-xs btn-mission-dismiss" data-action="dismiss" data-task-id="${task.id}">
+        <button type="button" class="btn-xs btn-mission-dismiss" data-action="dismiss" data-task-id="${task.id}" title="Remove from list">
+          ${ICON.close}
           Dismiss
         </button>
       `
@@ -536,7 +580,7 @@ class ExportMissionManager {
         </div>
 
         <div class="mission-item-meta">
-          <span class="mission-meta-info">${this._escape(task.etaText || '')}</span>
+          <span class="mission-meta-info">${this._escape(metaText)}</span>
           <div class="mission-item-actions">
             ${actionsHtml}
           </div>
@@ -555,9 +599,9 @@ class ExportMissionManager {
     const fill = el.querySelector('.mission-item-progress-fill')
     if (fill) fill.style.width = `${pct}%`
     const badge = el.querySelector('.mission-item-badge')
-    if (badge && task.status === 'recording') badge.textContent = `Recording ${pct}%`
+    if (badge && task.status === 'recording') badge.textContent = this._statusLabel(task)
     const meta = el.querySelector('.mission-meta-info')
-    if (meta) meta.textContent = task.etaText || ''
+    if (meta) meta.textContent = this._metaText(task)
   }
 
   _escape(str) {

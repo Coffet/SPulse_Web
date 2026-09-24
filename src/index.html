@@ -202,12 +202,18 @@
             <!-- Dynamically populated export tasks -->
           </div>
 
+          <!-- "Minimize dialog by default" removed — there is no export dialog to
+               minimize any more (`#export-modal` is commented out below), so the
+               option had no effect. Kept for reference:
+
           <div class="export-menu-foot">
             <label class="export-menu-opt" title="Export directly in background without opening the modal dialog">
               <input type="checkbox" id="mission-opt-auto-minimize">
               <span>Minimize dialog by default</span>
             </label>
           </div>
+
+          -->
         </div>
       </div>
 
@@ -757,7 +763,15 @@
   </div>
   </div><!-- /studio -->
 
-  <!-- Export Progress Modal -->
+  <!-- Export Progress Modal — SUPERSEDED BY #studio-mission-wrap (Export Process menu).
+       The mission wrap in the top bar now owns the whole export UX: progress, pause,
+       resume, cancel, download and dismissal. progressModal.js is kept as a state-only
+       progress reporter that always runs in "minimized" mode, so this dialog is no
+       longer rendered. Commented out rather than deleted so it can be restored.
+       To bring the dialog back: uncomment this block, then re-enable the auto-minimize
+       branch in src/export/progressModal.js show() and the "Details" action in
+       src/export/exportMissionManager.js.
+
   <div id="export-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal export-modal-content">
       <div class="modal-head">
@@ -781,6 +795,8 @@
       </div>
     </div>
   </div>
+
+  -->
 
   <!-- Error Dialog -->
   <div id="error-modal" class="modal-overlay hidden" role="alertdialog" aria-modal="true">
