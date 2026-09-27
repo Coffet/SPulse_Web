@@ -11,6 +11,8 @@ Desktop app for creating MP4 waveform visualizer videos from audio files. Runs f
 
 Built with Electron, Web Audio API, Canvas 2D, and FFmpeg.
 
+Made for the [Singularity Pulse](https://singularitypulse.com) community. Find it with the other creator resources at [singularitypulse.com/resources](https://singularitypulse.com/resources#spulse).
+
 ---
 
 ## Download
