@@ -10,7 +10,7 @@ import { backgroundRenderer }   from './background/backgroundRenderer.js'
 import { textOverlay }          from './overlay/textOverlay.js'
 import { initOverlayControls }  from './controls/overlayControls.js'
 import { initMenuBar }          from './controls/menuBar.js'
-import { startExport, isExporting }               from './export/exportPipeline.js'
+import { startExport, isExporting, cancelExport } from './export/exportPipeline.js'
 import { applyWebExportLimitsToDom, capWebExport, isWebExporting } from './export/webRecorder.js'
 import { exportSettings, resetExportSettingsToDefaults, isExportSettingsAtDefaults } from './export/exportSettings.js'
 import { serializeState, deserializeState, serializePortableState } from './project/projectManager.js'
@@ -622,6 +622,9 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     document.getElementById('error-modal')?.classList.add('hidden')
     document.getElementById('about-modal')?.classList.add('hidden')
+    // Desktop only: Escape cancels a running FFmpeg export. Web keeps recording
+    // on Escape by design — its exports are cancelled from the mission menu.
+    if (!isWeb() && isExporting()) cancelExport()
   }
 
   const isPlaybackShortcut = e.key === ' ' && !e.target.matches('input, textarea, select')

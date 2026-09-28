@@ -38,6 +38,15 @@ export function isExporting() {
   return _exporting || isWebExporting()
 }
 
+// Cancel the running desktop FFmpeg export — shared by the progress dialog's
+// Cancel button, the mission menu and the Escape shortcut. No-op when no desktop
+// export is running (web exports cancel through their mission task instead).
+export function cancelExport() {
+  if (!_exporting || _cancelled) return
+  _cancelled = true
+  window.api.exportCancel()
+}
+
 export async function startExport() {
   if (!window.appState?.loaded) return false
   if (isWeb()) return startWebExport()
@@ -95,15 +104,10 @@ export async function startExport() {
     canPause: false,
   })
 
-  const cancelExport = () => {
-    _cancelled = true
-    window.api.exportCancel()
-  }
-
   exportMissionManager.setTaskController(missionTask.id, { cancel: cancelExport })
 
-  // progressModal still computes ETA/fps from the shared start timestamp; its own
-  // dialog markup is gone (see index.html), so it runs as a state-only reporter.
+  // Desktop shows the blocking #export-modal dialog; its Cancel button shares
+  // cancelExport() with the mission menu and the Escape shortcut.
   progressModal.init(cancelExport)
   progressModal.show(totalFrames)
 
