@@ -110,6 +110,9 @@ async function loadAudio(arrayBuffer, filePath, displayName, { markDirty = true,
     const loader = new AudioLoader()
     await loader.load(arrayBuffer, displayName || filePath)
     if (_isLoadStale(generation)) {
+      // This loader's AudioContext was created for a load that has already been
+      // superseded — release it instead of leaking one context per stale load.
+      loader.audioContext?.close().catch(() => {})
       _revokeBlobUrl(filePath, '')
       _resetDropMessage()
       return
@@ -815,9 +818,25 @@ function _onPanelControlChange() {
 }
 
 // ─── Project: dirty tracking & title bar ─────────────────────────────────────
+// Snapshot only the export fields that serialize into a project file — outputPath
+// and askOnExport are session-only and must NOT mark the session dirty.
+function _snapshotExportSettings() {
+  return {
+    width:     exportSettings.width,
+    height:    exportSettings.height,
+    fps:       exportSettings.fps,
+    codec:     exportSettings.codec,
+    encoder:   exportSettings.encoder,
+    audioMode: exportSettings.audioMode,
+    bitrate:   exportSettings.bitrate,
+    filename:  exportSettings.filename,
+  }
+}
+
 function _sessionFingerprint() {
   return JSON.stringify({
     vs: _snapshotVS(),
+    es: _snapshotExportSettings(),
     audio: appState.filePath || appState.fileName || '',
   })
 }

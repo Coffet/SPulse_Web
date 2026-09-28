@@ -116,15 +116,15 @@ export const progressModal = {
 
     let etaText = ''
     let rate = 0
-    if (framesDone > 2 && this._eta) {
+    if (framesDone > 2) {
       const elapsed = (performance.now() - this._startTs) / 1000
-      rate    = framesDone / elapsed
+      rate    = elapsed > 0 ? framesDone / elapsed : 0
       const rem     = (totalFrames - framesDone) / Math.max(rate, 0.1)
       const eta     = this._formatEta(rem)
       etaText = this._realtime
         ? `~${eta} remaining`
         : `~${eta} remaining  (${rate.toFixed(1)} fps)`
-      this._eta.textContent = etaText
+      if (this._eta) this._eta.textContent = etaText
     }
 
     return { pct, etaText, statText, rate }
