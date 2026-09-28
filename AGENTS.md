@@ -94,22 +94,24 @@ audio-visualizer/
 - Export must never fail silently. On FFmpeg error, show error dialog with truncated log.
 
 ### Visual Design
-Dark-mode only. Never introduce light-mode styles.
+Dark is the default and primary theme; a light theme is allowed as an explicit opt-in. Colors live as CSS tokens in `src/styles/main.css` under `html[data-theme="dark"]` and `html[data-theme="light"]` — any new color must be a token defined for **both** themes, never a hardcoded value in component styles. The landing screen pins its own palette in `src/styles/home.css`.
 
-| Role | Hex |
-|---|---|
-| App Background | `#0D1117` |
-| Panel Background | `#161B22` |
-| Accent / Active | `#00D4FF` |
-| Text Primary | `#E6EDF3` |
-| Text Secondary | `#8B949E` |
-| Destructive Action | `#FF6B35` |
+| Role | Token | Dark | Light |
+|---|---|---|---|
+| App Background | `--color-app-bg` | `oklch(0.19 0.025 275)` | `oklch(0.96 0.012 275)` |
+| Panel Background | `--color-panel-bg` | `oklch(0.23 0.028 275)` | `oklch(0.99 0.006 275)` |
+| Accent / Active | `--color-accent` | `oklch(0.68 0.17 275)` | `oklch(0.48 0.19 275)` |
+| Text Primary | `--color-text-primary` | `oklch(0.95 0.012 275)` | `oklch(0.24 0.03 275)` |
+| Text Secondary | `--color-text-secondary` | `oklch(0.74 0.02 275)` | `oklch(0.42 0.025 275)` |
+| Destructive Action | `--color-destructive` | `oklch(0.68 0.17 32)` | `oklch(0.55 0.18 32)` |
 
 ### State Management
 All visualizer configuration lives in `src/visualizer/visualizerState.js` as a single plain object. Controls mutate this object; the canvas engine reads from it each frame. This object is also what gets serialized to `.spx` project files.
 
 ## Key Constraints
-- **Fully offline** — no external HTTP calls at runtime. Do not add any analytics, telemetry, or remote fetch calls.
+- **Fully offline** — no external HTTP calls at runtime. Do not add any analytics, telemetry, or remote fetch calls. The only exceptions are update checks:
+  - Desktop: `electron-updater` (GitHub Releases), from the main process only.
+  - Web build: `server.js` may fetch the upstream `package.json` for the version check (`/api/upstream`). This exception is web-only — the desktop app must never make this call.
 - **Installer size < 250MB** — use ASAR packaging; do not bundle unnecessary assets.
 - **FFmpeg license** — `ffmpeg-static` uses an LGPL build. Do not modify FFmpeg source. The About screen must acknowledge the LGPL license.
 - **No silent failures** — all export errors must surface to the user with actionable messaging.
