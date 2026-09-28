@@ -93,6 +93,23 @@ function _createDefaultVisualizerState() {
 
 export const visualizerState = _createDefaultVisualizerState()
 
+// Shallow-but-sufficient clone for export isolation: fresh top-level primitives plus
+// fresh background/overlay sub-objects. DOM element references (imageEl/videoEl) are
+// intentionally preserved — the loaded image/video data stays shared while the
+// position/scale/fit/style values are frozen, so a live UI edit can't leak into an
+// in-flight web recording.
+export function snapshotVisualizerState({ exportWidth, exportHeight } = {}) {
+  const w = exportWidth  ?? exportSettings.width
+  const h = exportHeight ?? exportSettings.height
+  return {
+    ...visualizerState,
+    exportWidth:  w,
+    exportHeight: h,
+    background: { ...visualizerState.background, exportWidth: w, exportHeight: h },
+    overlay:    { ...visualizerState.overlay,    exportWidth: w, exportHeight: h },
+  }
+}
+
 // Restore visualizerState to its original hardcoded defaults, in place — mutates the
 // existing object/sub-objects rather than replacing them, since other modules
 // (canvasEngine, backgroundRenderer, etc.) hold direct references to

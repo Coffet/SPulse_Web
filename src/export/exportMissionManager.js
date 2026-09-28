@@ -130,12 +130,6 @@ class ExportMissionManager {
           case 'reveal':
             this.revealTask(taskId)
             break
-          // 'dialog' action removed — it called progressModal.restore() to
-          // re-open `#export-modal`, which is commented out in index.html.
-          // case 'dialog':
-          //   progressModal.restore()
-          //   this.closeMenu()
-          //   break
           // 'download' action removed — the web export auto-downloads the file
           // on completion, so there is nothing to re-save from the menu.
           case 'dismiss':
@@ -519,16 +513,6 @@ class ExportMissionManager {
     const metaText    = this._metaText(task)
     const statusClass = `status-${task.status}`
     let actionsHtml = ''
-
-    // NOTE: the old "Details" button (data-action="dialog") has been removed.
-    // It only called progressModal.restore() to re-open `#export-modal`, which
-    // is commented out in index.html — the Export Process menu is the only
-    // export UI now, so there is no dialog to restore. Reference markup, kept
-    // in case the dialog is ever uncommented:
-    //
-    //   <button type="button" class="btn-xs btn-mission-dialog"
-    //           data-action="dialog" data-task-id="${task.id}"
-    //           title="Show progress dialog">Details</button>
 
     if (task.status === 'recording') {
       const pauseBtn = task.canPause

@@ -1402,15 +1402,9 @@ body.video-playmode .transport-bar {
   backdrop-filter: blur(3px);
 }
 
-/* Export dialog styles — dead while `#export-modal` is commented out in
-   index.html. progressModal.js no longer sets `body.exporting` (it always runs
-   minimized and hands progress to the Export Process menu), so these rules
-   only hide the canvas for a dialog that can no longer be shown.
-   To restore: uncomment alongside the markup.
-
-   Export recording is real-time and advances frames on the preview canvas.
-   Use an opaque backdrop so that motion isn't visible behind the modal.
-
+/* Export dialog styles — the dialog is shown on desktop (Electron); web exports
+   run minimized in the Export Process menu. The opaque backdrop hides the
+   preview canvas so motion isn't visible behind the modal during export. */
 #export-modal.modal-overlay {
   background: rgba(13, 17, 23, 0.94);
   backdrop-filter: none;
@@ -1426,8 +1420,6 @@ body.exporting #transport-bar {
   opacity: 0;
   pointer-events: none;
 }
-
-*/
 .modal {
   background: var(--color-panel-bg);
   border: 1px solid var(--color-panel-border);
@@ -1445,6 +1437,13 @@ body.exporting #transport-bar {
   font-size: 15px;
   font-weight: 600;
   color: var(--color-text-primary);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .progress-track {

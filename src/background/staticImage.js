@@ -20,8 +20,8 @@ export function drawStaticImage(ctx, W, H, bgState) {
   // resolution while sharing its exact aspect ratio. Do all fit math against the real
   // target size, then uniformly scale down to actual canvas pixel space with ctx.scale().
   // During export W/H already equal the target size 1:1, so this is a no-op there.
-  const targetW = exportSettings.width  || W
-  const targetH = exportSettings.height || H
+  const targetW = bgState.exportWidth  || exportSettings.width  || W
+  const targetH = bgState.exportHeight || exportSettings.height || H
 
   ctx.save()
   ctx.scale(W / targetW, H / targetH)

@@ -13,8 +13,8 @@ export const textOverlay = {
     // but possibly smaller (capped for performance — see staticImage.js for the full
     // explanation). Position/size math needs to happen against the real target
     // resolution, then get scaled down uniformly to actual canvas pixel space.
-    const targetW = exportSettings.width  || W
-    const targetH = exportSettings.height || H
+    const targetW = overlayState.exportWidth  || exportSettings.width  || W
+    const targetH = overlayState.exportHeight || exportSettings.height || H
 
     const lineGap = Math.round(titleSize * 0.2)
 

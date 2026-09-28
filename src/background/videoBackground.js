@@ -118,8 +118,8 @@ export class VideoBackground {
     // canvas that matches the target resolution's aspect ratio but may be smaller
     // (capped for performance), so fit math computed in real-target-size space
     // needs a uniform scale down to actual canvas pixel space.
-    const targetW = exportSettings.width  || W
-    const targetH = exportSettings.height || H
+    const targetW = bgState.exportWidth  || exportSettings.width  || W
+    const targetH = bgState.exportHeight || exportSettings.height || H
 
     try {
       ctx.save()

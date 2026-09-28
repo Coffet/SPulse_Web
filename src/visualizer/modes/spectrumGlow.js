@@ -7,8 +7,8 @@ export function drawSpectrumGlow(ctx, freqData, timeData, state, W, H) {
 
   // See barClassic.js — layout in real target-resolution space, scaled down to
   // actual canvas pixel space, so preview matches export regardless of canvas size.
-  const targetW = exportSettings.width  || W
-  const targetH = exportSettings.height || H
+  const targetW = state.exportWidth  || exportSettings.width  || W
+  const targetH = state.exportHeight || exportSettings.height || H
 
   // numBars is authoritative (Feature B) — barWidth derives from it. The hue-by-index
   // gradient below is unaffected since it's a ratio (i / numBars), not tied to width.

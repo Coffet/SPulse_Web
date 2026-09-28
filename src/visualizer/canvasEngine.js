@@ -17,8 +17,13 @@ export class CanvasEngine {
     this.r2d     = null   // Renderer2D — set after audio loads
     this.running = false
     this._rafId  = null
+    this._bgRenderId = null  // timer loop used while the tab is hidden (web export)
     this._appState = null
     this._exportAnalyser = null
+
+    // Export-mode state snapshot — set by webRecorder.js so live UI edits don't
+    // leak into an in-flight recording (desktop blocks interaction via the modal).
+    this._exportState = null
 
     // FPS tracking
     this._lastTs    = 0
@@ -47,6 +52,12 @@ export class CanvasEngine {
   setUpdateScrubber(fn) { this._scrubberFn = fn }
 
   setExportAnalyser(analyser) { this._exportAnalyser = analyser || null }
+
+  // Freeze the visualizer configuration used while rendering export frames. The
+  // export canvas reads this snapshot instead of the live `visualizerState`, so a
+  // user editing the UI mid-recording can't change what gets exported.
+  setExportState(state) { this._exportState = state || null }
+  clearExportState()   { this._exportState = null }
 
   initExport(appState, canvas) {
     this._appState = appState
@@ -106,9 +117,26 @@ export class CanvasEngine {
   stop() {
     this.running = false
     if (this._rafId) { cancelAnimationFrame(this._rafId); this._rafId = null }
+    this.stopBackgroundRender()
     this._resetFpsDisplay()
     // Render one static frame so canvas shows current state while paused
     this._drawFrame(performance.now())
+  }
+
+  // Timer-based fallback for the export canvas while the tab is hidden — RAF
+  // stops firing in background tabs, so web exports switch to a throttled
+  // interval to keep drawing (and keep the recording alive) when the user
+  // switches tabs. Audio keeps playing through the AudioContext.
+  startBackgroundRender() {
+    if (this._bgRenderId) return
+    this._bgRenderId = setInterval(() => this.renderSyncFrame(), 100)
+  }
+
+  stopBackgroundRender() {
+    if (this._bgRenderId) {
+      clearInterval(this._bgRenderId)
+      this._bgRenderId = null
+    }
   }
 
   // ─── Internal ─────────────────────────────────────────────────────────────
@@ -190,32 +218,37 @@ export class CanvasEngine {
     // waveform/overlay below would get drawn a second time on top of whatever
     // was already fully composited on the canvas from the previous frame,
     // producing a visible brightness/opacity spike.
-    ctx.fillStyle = visualizerState.background.color || '#0D1117'
+    //
+    // Export frames read a frozen snapshot of the visualizer config (see
+    // setExportState) so live UI edits can't leak into an in-flight export.
+    const state = this._exportState || visualizerState
+
+    ctx.fillStyle = state.background.color || '#0D1117'
     ctx.fillRect(0, 0, W, H)
 
     // Task-7 replaces this branch with the full background renderer
     if (window.backgroundRenderer) {
-      window.backgroundRenderer.draw(ctx, W, H, visualizerState.background)
+      window.backgroundRenderer.draw(ctx, W, H, state.background)
     } else {
-      ctx.fillStyle = visualizerState.background.color
+      ctx.fillStyle = state.background.color
       ctx.fillRect(0, 0, W, H)
     }
 
     // ── Waveform ───────────────────────────────────────────────────────────
-    const drawFn = MODES[visualizerState.mode] || MODES.bar_classic
+    const drawFn = MODES[state.mode] || MODES.bar_classic
 
-    if (visualizerState.channelMode === 'stereo') {
-      this._drawStereoWaveform(drawFn, ctx, analyser, W, H)
+    if (state.channelMode === 'stereo') {
+      this._drawStereoWaveform(drawFn, ctx, analyser, W, H, state)
     } else {
       const freqData = this._exportFreqData || (analyser ? analyser.getFrequencyData()  : new Uint8Array(1024))
       const timeData = this._exportTimeData || (analyser ? analyser.getTimeDomainData() : new Uint8Array(1024).fill(128))
-      drawFn(ctx, freqData, timeData, visualizerState, W, H)
+      drawFn(ctx, freqData, timeData, state, W, H)
     }
 
     // ── Text overlay ───────────────────────────────────────────────────────
     // Task-8 replaces this with the full textOverlay renderer
-    if (window.textOverlay && visualizerState.overlay.enabled) {
-      window.textOverlay.draw(ctx, W, H, visualizerState.overlay)
+    if (window.textOverlay && state.overlay.enabled) {
+      window.textOverlay.draw(ctx, W, H, state.overlay)
     }
 
     // ── Scrubber + time ────────────────────────────────────────────────────
@@ -231,22 +264,22 @@ export class CanvasEngine {
   // ctx.scale(W/targetW, H/targetH) (see barClassic.js), so calling a mode with a
   // transformed ctx and a reduced W/H (a sub-viewport) already produces correctly
   // scaled/mirrored output with no mode-file changes needed.
-  _drawStereoWaveform(drawFn, ctx, analyser, W, H) {
+  _drawStereoWaveform(drawFn, ctx, analyser, W, H, state = visualizerState) {
     const { left: freqL, right: freqR } = this._exportFreqDataStereo
       || (analyser ? analyser.getFrequencyDataStereo() : { left: new Uint8Array(1024), right: new Uint8Array(1024) })
     const { left: timeL, right: timeR } = this._exportTimeDataStereo
       || (analyser ? analyser.getTimeDomainDataStereo() : { left: new Uint8Array(1024).fill(128), right: new Uint8Array(1024).fill(128) })
 
-    // Don't mutate the shared visualizerState — mode files only ever read `state`,
+    // Don't mutate the shared state — mode files only ever read `state`,
     // never write to it, so a shallow per-channel clone is safe and cheap.
-    const stateL = visualizerState.independentChannelColors
-      ? { ...visualizerState, color: visualizerState.colorL }
-      : visualizerState
-    const stateR = visualizerState.independentChannelColors
-      ? { ...visualizerState, color: visualizerState.colorR }
-      : visualizerState
+    const stateL = state.independentChannelColors
+      ? { ...state, color: state.colorL }
+      : state
+    const stateR = state.independentChannelColors
+      ? { ...state, color: state.colorR }
+      : state
 
-    if (visualizerState.stereoLayout === 'mirrored') {
+    if (state.stereoLayout === 'mirrored') {
       // Both channels use the full W/H, sharing a center axis. Left draws normally;
       // right is flipped vertically first, so each mode's existing "grows upward
       // from centerY" logic makes it visually grow in the opposite direction.
