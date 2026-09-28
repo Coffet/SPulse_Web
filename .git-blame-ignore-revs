@@ -1,0 +1,8 @@
+# Commits skipped by `git blame` (GitHub applies this file automatically).
+# Locally: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Refactor normalize line endings to LF
+3cba64fb67d33bb69b6fb5fcaeee2610bf51d734
+
+# Refactor restore CRLF line endings changed in PR #4
+29fd78e0a640d9c104af30fccfdddb6a732b4364
