@@ -1,9 +1,9 @@
-# SPulse: Web Version
+# SPulse
 
-[Latest Release](https://github.com/senriki/SPulse/releases/latest)
-[License](./LICENSE)
-[Downloads](https://github.com/senriki/SPulse/releases)
-[CI](https://github.com/senriki/SPulse/actions/workflows/ci.yml)
+[![Latest Release](https://img.shields.io/github/v/release/senriki/SPulse?label=release&style=flat-square&logo=github)](https://github.com/senriki/SPulse/releases/latest)
+[![License](https://img.shields.io/github/license/senriki/SPulse?style=flat-square)](./LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/senriki/SPulse/total?style=flat-square&logo=github)](https://github.com/senriki/SPulse/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/senriki/SPulse/ci.yml?branch=main&label=CI&style=flat-square&logo=githubactions)](https://github.com/senriki/SPulse/actions/workflows/ci.yml)
 
 SPulse is a waveform visualizer you can run in the **browser** or as a **desktop** app. Same editor, same styles — no accounts, no database.
 
@@ -238,7 +238,7 @@ The app's Help > About screen lists all open-source component licenses as requir
 | Original desktop app | [Senriki](https://github.com/senriki) — Electron, FFmpeg export, visualizer engine |
 | Web version & UI rebuild | [Coffet](https://github.com/Coffet) — browser runtime, landing, and rebuilt editor UI |
 
-This repo is a fork of [senriki/SPulse](https://github.com/senriki/SPulse).
+Everyone who has contributed code is listed on the [contributors page](https://github.com/senriki/SPulse/graphs/contributors), and each release's notes credit the contributors to that release.
 
 ---
 
