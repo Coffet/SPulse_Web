@@ -33,6 +33,8 @@ jobs:
 
       - name: Generate changelog
         id: changelog
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # compare API → contributor logins
         run: |
           python3 - <<'PYEOF'
           import subprocess, os, re
@@ -58,10 +60,13 @@ jobs:
           prev = candidates[0] if candidates else ''
 
           range_arg = f"{prev}..HEAD" if prev else "HEAD"
-          raw = subprocess.getoutput(f"git log --pretty=format:%s {range_arg}").splitlines()
+          # --first-parent: only the release branch's own commits. Contributor branches
+          # merged with their history intact (e.g. `-s ours` after a squash) would
+          # otherwise dump every unconventional side commit into "Other Changes".
+          raw = subprocess.getoutput(f"git log --first-parent --pretty=format:%s {range_arg}").splitlines()
 
           cats = {"Features": [], "Bug Fixes": [], "Improvements": [], "Other Changes": []}
-          skip = re.compile(r"^(bump version|docs)", re.I)
+          skip = re.compile(r"^(bump version|docs|merge )", re.I)
           feat = re.compile(r"^add ", re.I)
           fix  = re.compile(r"^fix ", re.I)
           impr = re.compile(r"^(update|improve|refactor) ", re.I)
@@ -73,6 +78,52 @@ jobs:
               elif impr.match(line): cats["Improvements"].append(line)
               else:                  cats["Other Changes"].append(line)
 
+          # ── Contributors ──────────────────────────────────────────────────────
+          # Unlike the categories above, this walks ALL commits in range (side
+          # branches included) plus Co-authored-by trailers, so contributors whose
+          # work landed via merge or squash are still credited. GitHub logins come
+          # from the compare API; if that fails, fall back to git author names.
+          noreply_re = re.compile(r"^(?:\d+\+)?([^@]+)@users\.noreply\.github\.com$", re.I)
+          def is_bot(name, email, login="", kind=""):
+              m = noreply_re.match(email)
+              handle = (login or (m.group(1) if m else "")).lower()
+              return (kind == "Bot" or handle.endswith("[bot]") or handle == "copilot"
+                      or "[bot]" in name.lower() or "[bot]" in email.lower()
+                      or name.lower() in ("copilot", "github")
+                      or email.lower().endswith("@anthropic.com")
+                      or email.lower() == "noreply@github.com")
+
+          people = {}   # dedupe key → display string
+          def credit(name, email, login="", kind=""):
+              if is_bot(name, email, login, kind): return
+              m = noreply_re.match(email)
+              login = login or (m.group(1) if m else "")
+              key = (login or email or name).lower()
+              people.setdefault(key, f"@{login}" if login else name)
+
+          head = subprocess.getoutput("git rev-parse HEAD").strip()
+          api_ok = False
+          if prev:
+              r = subprocess.run(
+                  ["gh", "api", "--paginate",
+                   f"repos/{os.environ['GITHUB_REPOSITORY']}/compare/{prev}...{head}",
+                   "--jq", '.commits[] | [.author.login // "", .author.type // "", .commit.author.name, .commit.author.email] | @tsv'],
+                  capture_output=True, text=True)
+              if r.returncode == 0:
+                  api_ok = True
+                  for row in r.stdout.splitlines():
+                      login, kind, name, email = (row.split("\t") + ["", "", "", ""])[:4]
+                      credit(name, email, login, kind)
+          if not api_ok:
+              for row in subprocess.getoutput(f"git log --format=%an%x09%ae {range_arg}").splitlines():
+                  name, _, email = row.partition("\t")
+                  credit(name, email)
+          trailers = subprocess.getoutput(
+              f"git log --format='%(trailers:key=Co-authored-by,valueonly,separator=%x0A)' {range_arg}")
+          for t in trailers.splitlines():
+              m = re.match(r"\s*(.+?)\s*<([^>]+)>", t)
+              if m: credit(m.group(1), m.group(2))
+
           today = date.today().isoformat()
           sections = [f"## {curr} — {today}\n"]
           for title, items in cats.items():
@@ -80,6 +131,15 @@ jobs:
                   sections.append(f"### {title}")
                   sections.extend(f"- {i}" for i in items)
                   sections.append("")
+          # A git name with no resolvable login (non-noreply email, API unavailable)
+          # can duplicate someone already credited by @login — keep the @login.
+          handles = {p[1:].lower() for p in people.values() if p.startswith("@")}
+          credited = sorted({p for p in people.values()
+                             if p.startswith("@") or p.lower() not in handles}, key=str.lower)
+          if credited:
+              sections.append("### Contributors")
+              sections.extend(f"- {p}" for p in credited)
+              sections.append("")
 
           body = "\n".join(sections)
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
