@@ -9,6 +9,8 @@ import { exportSettings }   from './exportSettings.js'
 import { showErrorDialog }  from '../ui/errorDialog.js'
 import { visualizerState }  from '../visualizer/visualizerState.js'
 import { analyzeOffline }   from '../audio/offlineFrequencyAnalyser.js'
+import { isWeb }            from '../platform/webApi.js'
+import { startWebExport, isWebExporting }   from './webRecorder.js'
 
 // Silence fallback for any export frame whose real FFT data wasn't captured
 // (export cancelled mid-analysis, or a rendering edge case at the very end of
@@ -32,15 +34,17 @@ let _cancelled  = false
 let _exporting  = false
 
 export function isExporting() {
-  return _exporting
+  return _exporting || isWebExporting()
 }
 
 export async function startExport() {
+  if (!window.appState?.loaded) return false
+  if (isWeb()) return startWebExport()
+
   const appState = window.appState
-  if (!appState?.loaded) return
   // Guard against re-entrant calls (double-click, Ctrl+E while exporting) —
   // a second export-video call would kill the in-flight FFmpeg process mid-stream.
-  if (_exporting) return
+  if (_exporting) return false
   _exporting  = true
   _cancelled  = false
   const btnExport = document.getElementById('btn-export')
@@ -63,7 +67,7 @@ export async function startExport() {
       _exporting = false
       if (btnExport) btnExport.disabled = false
       if (btnPlay)   btnPlay.disabled   = false
-      return
+      return false
     }
     outputPath = picked
     exportSettings.outputPath = picked
@@ -179,4 +183,6 @@ export async function startExport() {
     if (btnExport) btnExport.disabled = false
     if (btnPlay)   btnPlay.disabled   = false
   }
+
+  return true
 }

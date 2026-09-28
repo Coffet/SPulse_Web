@@ -17,38 +17,87 @@
 }
 
 /* ─── Design Tokens ─────────────────────────────────────────────────────── */
+/* Landing (.home-screen) pins its own original palette in home.css.
+   Studio + modals follow html[data-theme]. */
 :root {
-  --color-app-bg:       #0D1117;
-  --color-panel-bg:     #161B22;
-  --color-panel-border: #21262D;
-  --color-surface-hover: #1C2128;
-  --color-surface-active: #21262D;
-
-  --color-accent:       #00D4FF;
-  --color-accent-dim:   rgba(0, 212, 255, 0.12);
-  --color-accent-glow:  rgba(0, 212, 255, 0.35);
-
-  --color-text-primary:   #E6EDF3;
-  --color-text-secondary: #8B949E;
-  --color-text-muted:     #484F58;
-  --color-destructive:    #FF6B35;
-
-  --color-canvas-bg: #090d12;
-
-  --panel-left-width:  260px;
-  --panel-right-width: 280px;
-  --transport-height:  52px;
-  --panel-header-height: 46px;
-
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-
-  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-studio: 'Segoe UI Variable Text', 'Segoe UI', 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
 
-  --transition-fast: 100ms ease;
-  --transition-med:  180ms ease;
+  --panel-inspector-width: 320px;
+  --panel-right-width: var(--panel-inspector-width);
+  --transport-height: 56px;
+  --topbar-height: 52px;
+  --panel-header-height: 46px;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --transition-fast: 120ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-med:  200ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  --shadow-panel: 0 0 0 1px color-mix(in oklch, var(--color-panel-border) 80%, transparent);
+}
+
+:root,
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --color-app-bg:        oklch(0.19 0.025 275);
+  --color-panel-bg:      oklch(0.23 0.028 275);
+  --color-panel-border:  oklch(0.34 0.03 275);
+  --color-surface-hover: oklch(0.28 0.03 275);
+  --color-surface-active: oklch(0.31 0.032 275);
+
+  --color-accent:        oklch(0.68 0.17 275);
+  --color-accent-dim:    oklch(0.68 0.17 275 / 0.14);
+  --color-accent-glow:   oklch(0.68 0.17 275 / 0.28);
+  --color-accent-ink:    oklch(0.99 0.01 275);
+
+  --color-text-primary:   oklch(0.95 0.012 275);
+  --color-text-secondary: oklch(0.74 0.02 275);
+  --color-text-muted:     oklch(0.60 0.02 275);
+  --color-destructive:    oklch(0.68 0.17 32);
+
+  /* Export task status — paused / completed. Tinted toward the app hue (275)
+     so they sit in the same family as accent and destructive rather than
+     reading as borrowed traffic-light colors. */
+  --color-warn:      oklch(0.80 0.13 79);
+  --color-warn-dim:  oklch(0.80 0.13 79 / 0.15);
+  --color-ok:        oklch(0.79 0.15 158);
+  --color-ok-dim:    oklch(0.79 0.15 158 / 0.15);
+
+  --color-canvas-bg: oklch(0.15 0.02 275);
+  --color-drop-veil: oklch(0.18 0.025 275 / 0.88);
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --color-app-bg:        oklch(0.96 0.012 275);
+  --color-panel-bg:      oklch(0.99 0.006 275);
+  --color-panel-border:  oklch(0.87 0.02 275);
+  --color-surface-hover: oklch(0.94 0.016 275);
+  --color-surface-active: oklch(0.91 0.02 275);
+
+  --color-accent:        oklch(0.48 0.19 275);
+  --color-accent-dim:    oklch(0.48 0.19 275 / 0.12);
+  --color-accent-glow:   oklch(0.48 0.19 275 / 0.22);
+  --color-accent-ink:    oklch(0.99 0.01 275);
+
+  --color-text-primary:   oklch(0.24 0.03 275);
+  --color-text-secondary: oklch(0.42 0.025 275);
+  --color-text-muted:     oklch(0.52 0.02 275);
+  --color-destructive:    oklch(0.55 0.18 32);
+
+  /* Darkened against the light panel so they stay legible as badge text —
+     measured 4.7:1 (paused) and 4.9:1 (done). */
+  --color-warn:      oklch(0.50 0.13 62);
+  --color-warn-dim:  oklch(0.50 0.13 62 / 0.13);
+  --color-ok:        oklch(0.47 0.13 158);
+  --color-ok-dim:    oklch(0.47 0.13 158 / 0.13);
+
+  --color-canvas-bg: oklch(0.92 0.014 275);
+  --color-drop-veil: oklch(0.99 0.006 275 / 0.88);
 }
 
 /* ─── Reset ─────────────────────────────────────────────────────────────── */
@@ -68,10 +117,17 @@ html, body {
   flex-direction: column;
 }
 
-/* ─── App Layout (3-column grid) ─────────────────────────────────────────── */
+body.studio-active {
+  font-family: var(--font-studio);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* ─── App Layout (stage + inspector) ─────────────────────────────────────── */
 .app-layout {
+  position: relative;
   display: grid;
-  grid-template-columns: var(--panel-left-width) 1fr var(--panel-right-width);
+  grid-template-columns: minmax(0, 1fr) var(--panel-inspector-width);
   grid-template-rows: 1fr;
   flex: 1;
   min-height: 0;
@@ -88,7 +144,10 @@ html, body {
   transition: opacity var(--transition-med);
 }
 
-.panel.collapsed { opacity: 0; }
+.panel.collapsed {
+  opacity: 0;
+  pointer-events: none;
+}
 
 .panel-header {
   display: flex;
@@ -100,76 +159,520 @@ html, body {
   flex-shrink: 0;
 }
 
-.app-icon { width: 20px; height: 20px; flex-shrink: 0; }
+.app-icon { width: 20px; height: 20px; flex-shrink: 0; display: block; color: var(--color-accent); }
 
 .app-name {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  height: 20px;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1;
   color: var(--color-text-primary);
 }
 
-/* ─── Custom in-app menu bar (Windows/Linux only) ──────────────────────────── */
-/* Full-width, top of the window — independent of any panel's width, so a
-   dropdown never looks oversized relative to its container. Same
-   collapse/expand drawer mechanism as .panel-toggle (left/right panels):
-   a pill tab straddling the bar's bottom edge, chevron rotates 180° between
-   states, height animates via transition. Deliberately NEVER uses
-   overflow:hidden on .app-menu-bar — clipping content is done via
-   `visibility: hidden` on the nav instead, so the toggle tab (also an
-   absolutely-positioned child) is never at risk of being clipped by its own
-   collapsing parent, and the open dropdown (which renders below the bar's
-   own height) is never clipped either — see task-27 postmortem for why this
-   matters (an earlier draft using overflow:hidden clipped the dropdown). */
-.app-menu-bar {
+/* ─── Studio top bar ─────────────────────────────────────────────────────── */
+.studio-topbar {
+  position: relative;
+  /* Above the panel toggle tabs (z-index 10, 11 on web). The top bar creates a
+     stacking context, so its dropdown menus — File/Edit/Help and the Export
+     Process menu — can only paint as high as this value; at 6 the toggles
+     clipped their lower-right corner. Kept below the video-mode transport bar
+     (20) and the modal overlays (200), which must still cover the top bar. */
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--topbar-height);
+  padding: 0 12px 0 14px;
+  background: var(--color-panel-bg);
+  border-bottom: 1px solid var(--color-panel-border);
+  flex-shrink: 0;
+}
+
+.studio-topbar-start {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.studio-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.studio-track {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: clamp(18rem, 34vw, 34rem);
+  height: 32px;
+  margin: 0;
+  padding: 0 10px 0 8px;
+  background: var(--color-app-bg);
+  border: 1px solid var(--color-panel-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+}
+
+.studio-track:hover {
+  background: var(--color-surface-hover);
+  border-color: color-mix(in oklch, var(--color-text-muted) 50%, var(--color-panel-border));
+  color: var(--color-text-primary);
+}
+
+.studio-track-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.studio-track-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.studio-track[data-empty="false"] {
+  color: var(--color-text-primary);
+}
+
+.studio-track[data-empty="false"] .studio-track-icon {
+  display: none;
+}
+
+.studio-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.studio-history {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--color-panel-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-app-bg);
+}
+
+.studio-history .btn-icon-sm {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.studio-history .btn-icon-sm + .btn-icon-sm {
+  border-left: 1px solid var(--color-panel-border);
+}
+
+.studio-history .btn-icon-sm svg {
+  width: 16px;
+  height: 16px;
+}
+
+.studio-history .btn-icon-sm:not(:disabled):hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.studio-history .btn-icon-sm:not(:disabled):active {
+  background: var(--color-surface-active);
+}
+
+.studio-topbar-actions > .btn-icon-sm {
+  width: 32px;
+  height: 32px;
+}
+
+/* ─── Export Mission icon + process menu ─────────────────────────────────── */
+.studio-mission-wrap {
   position: relative;
   display: flex;
   align-items: center;
-  height: 30px;
-  padding: 0 8px;
-  background: var(--color-app-bg);
-  border-bottom: 1px solid var(--color-panel-border);
-  flex-shrink: 0;
-  transition: height var(--transition-med);
 }
 
-.app-menu-bar.collapsed {
-  height: 0;
-  border-bottom: none;
-}
-
-.app-menu-bar.collapsed .menu-bar { visibility: hidden; }
-
-.app-menu-toggle {
-  position: absolute;
-  left: 50%;
-  top: 100%;
-  transform: translateX(-50%);
-  z-index: 5;
-  width: 44px;
-  height: 16px;
+.btn-mission-icon {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
   padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  color: var(--color-accent);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.btn-mission-icon:hover,
+.btn-mission-icon.is-active {
+  background: var(--color-surface-hover);
+  border-color: var(--color-panel-border);
+}
+
+/* Menu-open ring, tinted from the icon's own state colour so it stays in sync
+   when the task is paused or finished. */
+.btn-mission-icon.is-active { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); }
+
+/* Same status colours as the cards inside the menu. */
+.btn-mission-icon.is-paused { color: var(--color-warn); }
+.btn-mission-icon.is-completed { color: var(--color-ok); }
+
+.mission-circular-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.mission-circle-bg { stroke: var(--color-surface-active); }
+.mission-circle-fg {
+  stroke: currentColor;
+  transition: stroke-dashoffset 180ms ease;
+}
+
+.mission-icon-inner {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  background: var(--color-panel-bg);
+  border-radius: 50%;
+}
+
+.mission-glyph { width: 12px; height: 12px; }
+
+.mission-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  display: grid;
+  place-items: center;
+  background: var(--color-accent);
+  color: var(--color-app-bg);
+  border: 2px solid var(--color-app-bg);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.export-process-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 300;
+  width: min(400px, calc(100vw - 24px));
+  overflow: hidden;
   background: var(--color-panel-bg);
   border: 1px solid var(--color-panel-border);
-  border-top: none;
-  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 2px oklch(0.12 0.03 275 / 0.30), 0 18px 46px oklch(0.12 0.03 275 / 0.42);
+  transform-origin: top right;
+  animation: mission-menu-in 140ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes mission-menu-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+.export-menu-head,
+.export-menu-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-panel-border);
+}
+
+/* Only used when a footer is present — the "Minimize dialog by default" option
+   that lived here is commented out in index.html along with the dialog. */
+.export-menu-foot { border-top: 1px solid var(--color-panel-border); border-bottom: 0; }
+
+.export-menu-head {
+  background: color-mix(in srgb, var(--color-surface-hover) 60%, var(--color-panel-bg));
+}
+
+.export-menu-title-wrap { display: flex; align-items: center; gap: 8px; }
+.export-menu-title { font-size: 12.5px; font-weight: 650; color: var(--color-text-primary); letter-spacing: 0.01em; }
+
+.export-menu-status-badge,
+.mission-item-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 7px;
+  border-radius: 999px;
+  background: var(--color-surface-active);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The header badge picks its own colour; a card badge must NOT, or it would
+   override the status colour it inherits from `.mission-item.status-*`. */
+.export-menu-status-badge { color: var(--color-text-secondary); }
+
+/* Leading status dot. Its colour is `currentColor`, so each state is readable
+   by shape as well as hue. */
+.export-menu-status-badge::before,
+.mission-item-badge::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.export-menu-status-badge.badge-active { color: var(--color-accent);         background: var(--color-accent-dim); }
+.export-menu-status-badge.badge-paused { color: var(--color-warn);           background: var(--color-warn-dim); }
+.export-menu-status-badge.badge-queued { color: var(--color-text-secondary); background: var(--color-surface-active); }
+.export-menu-status-badge.badge-done   { color: var(--color-ok);             background: var(--color-ok-dim); }
+
+.export-menu-head-actions { display: flex; align-items: center; gap: 4px; }
+.btn-text-xs, .btn-icon-xs {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  transition: color var(--transition-fast), background var(--transition-fast), opacity var(--transition-fast);
+}
+.btn-text-xs { padding: 4px 7px; }
+.btn-icon-xs { width: 24px; height: 24px; padding: 0; font-size: 12px; line-height: 1; }
+.btn-text-xs:hover, .btn-icon-xs:hover { color: var(--color-accent); background: var(--color-accent-dim); }
+.btn-text-xs:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-text-xs:disabled:hover { color: var(--color-text-muted); background: transparent; }
+
+/* Show 4 task cards, then scroll. All cards are the same height — 13px/12px
+   padding + header + progress block + 26px (.btn-xs) action row + divider,
+   measured at ~94.5px each (4 cards occupy 378px of content). `overflow-y:
+   auto` therefore only draws a scrollbar once a 5th card exists. The +2px
+   tolerance absorbs subpixel rounding and font-metric drift; the trade-off is
+   a ~2px peek of the next card, which usefully hints that the list scrolls.
+   The 60vh cap keeps the menu inside short windows, where
+   `.export-process-menu`'s own `overflow: hidden` would otherwise clip the
+   list with no way to reach the rest.
+   Re-measure both numbers if the card layout changes. */
+.export-menu-list {
+  --mission-card-h: 95px;
+  max-height: min(calc(4 * var(--mission-card-h) + 2px), 60vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-panel-border) transparent;
+}
+/* Mirrors .panel-body's scrollbar treatment. Note `scrollbar-width: thin` above
+   takes precedence over these in Chromium (measured gutter: 10px, not 4px) —
+   kept for parity with the panel scrollbars. */
+.export-menu-list::-webkit-scrollbar { width: 4px; }
+.export-menu-list::-webkit-scrollbar-track { background: transparent; }
+.export-menu-list::-webkit-scrollbar-thumb { background: var(--color-panel-border); border-radius: 2px; }
+
+.mission-item {
+  padding: 13px 14px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-panel-border) 62%, transparent);
+  transition: background var(--transition-fast);
+}
+.mission-item:last-child { border-bottom: 0; }
+.mission-item:hover { background: color-mix(in srgb, var(--color-surface-hover) 45%, transparent); }
+
+/* Each status sets one colour; the badge tint and progress fill both derive
+   from it via currentColor, so a status only has to be defined once.
+   These values are also badge *text*, so they must clear 4.5:1 against their
+   own 15% tint — hence secondary (not muted) for the inactive states. */
+.mission-item.status-recording { color: var(--color-accent); }
+.mission-item.status-paused    { color: var(--color-warn); }
+.mission-item.status-completed { color: var(--color-ok); }
+.mission-item.status-queued,
+.mission-item.status-cancelled { color: var(--color-text-secondary); }
+
+/* Dimmed, but not so far that the badge stops being readable. */
+.mission-item.status-cancelled { opacity: 0.75; }
+.mission-item.status-cancelled:hover { opacity: 1; }
+
+.mission-item-header, .mission-item-meta { display: flex; align-items: center; justify-content: space-between; gap: 9px; }
+.mission-item-title { min-width: 0; overflow: hidden; color: var(--color-text-primary); font-size: 12.5px; font-weight: 600; letter-spacing: -0.005em; text-overflow: ellipsis; white-space: nowrap; }
+/* Inherits the status colour set on the card, so the badge tint always matches
+   the progress fill without a rule per status. */
+.mission-item-badge { color: inherit; background: color-mix(in srgb, currentColor 15%, transparent); }
+
+.mission-item-progress-track {
+  position: relative;
+  height: 4px;
+  margin: 10px 0 9px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-surface-active) 75%, transparent);
+  border-radius: 999px;
+}
+.mission-item-progress-fill {
+  height: 100%;
+  background: currentColor;
+  border-radius: inherit;
+  transition: width 180ms linear;
+}
+
+/* A queued task has no progress to show, so the empty track gets a slow sweep
+   to say "waiting", not "stalled". Motion is neutralised globally by the
+   prefers-reduced-motion block at the end of this file. */
+.mission-item.status-queued .mission-item-progress-track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-text-muted) 45%, transparent), transparent);
+  animation: mission-queued-sweep 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+@keyframes mission-queued-sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+
+.mission-meta-info {
+  min-width: 0;
+  overflow: hidden;
+  /* Secondary rather than muted: this is 10px, so it needs the contrast. The
+     hierarchy still reads because of the size, weight and mono family. */
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mission-item-actions { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+
+.btn-xs {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 4px 9px;
+  border: 1px solid var(--color-panel-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: color var(--transition-fast), background var(--transition-fast);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 550;
+  transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
 }
-
-.app-menu-toggle:hover {
+.btn-xs:hover {
   color: var(--color-text-primary);
-  background: var(--color-surface-hover);
+  background: var(--color-surface-active);
+  border-color: color-mix(in srgb, var(--color-panel-border) 55%, var(--color-text-secondary));
+}
+.btn-xs:active { transform: translateY(0.5px); }
+.btn-xs:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-xs:disabled:hover { color: var(--color-text-secondary); background: var(--color-surface-hover); border-color: var(--color-panel-border); }
+
+/* Cancel stops a job that is still running, so it reads destructive on hover. */
+.btn-mission-cancel:hover { color: var(--color-destructive); border-color: var(--color-destructive); background: color-mix(in srgb, var(--color-destructive) 12%, transparent); }
+
+.icon-xs { width: 11px; height: 11px; }
+.mission-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 30px 16px;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+.mission-empty-state svg { width: 18px; height: 18px; opacity: 0.55; margin-bottom: 5px; }
+.mission-empty-title { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); }
+.mission-empty-sub { font-size: 11px; }
+.export-menu-opt { display: flex; align-items: center; gap: 7px; color: var(--color-text-secondary); font-size: 11px; cursor: pointer; }
+.export-menu-opt input { accent-color: var(--color-accent); }
+
+/* Dead rule — `#export-modal` is commented out in index.html.
+body.export-minimized #export-modal { display: none; }
+*/
+
+@media (max-width: 640px) {
+  .export-process-menu { right: -46px; }
+  .studio-topbar-actions { gap: 4px; }
+  .studio-export .btn-export { padding: 0 10px; }
+  .studio-export .btn-export .icon-sm { display: none; }
 }
 
-.app-menu-toggle svg { width: 12px; height: 12px; flex-shrink: 0; transition: transform var(--transition-fast); }
+.studio-export {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  position: relative;
+}
 
-.app-menu-bar.collapsed .app-menu-toggle svg { transform: rotate(180deg); }
+.studio-export.is-disabled {
+  pointer-events: none;
+}
+
+.studio-export .btn-export {
+  width: auto;
+  height: 34px;
+  min-width: 0;
+  padding: 0 14px;
+  border-radius: 999px;
+}
+
+.studio-export .export-hint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ─── Custom in-app menu bar (Windows/Linux only) ──────────────────────────── */
+/* File/Edit/Help sit in the studio top bar. Dropdowns open below each trigger. */
+.studio-topbar .app-menu-bar {
+  display: flex;
+  align-items: center;
+  position: static;
+  height: auto;
+  padding: 0;
+  background: transparent;
+  border: none;
+}
 
 .menu-bar {
   display: flex;
@@ -185,8 +688,8 @@ html, body {
   border: none;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: 12px;
-  padding: 4px 8px;
+  font-size: 13px;
+  padding: 5px 9px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: var(--transition-fast);
@@ -274,9 +777,9 @@ html, body {
 .panel-section:last-child { border-bottom: none; }
 
 .section-label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--color-text-secondary);
   margin-bottom: 10px;
@@ -305,15 +808,17 @@ html, body {
 
 .tab-btn {
   flex: 1;
-  padding: 8px 4px;
+  padding: 10px 6px 9px;
   background: transparent;
-  border: 1px solid transparent;
-  font-size: 11px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font: inherit;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: -0.01em;
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
 }
 
 .tab-btn:hover:not(.active) {
@@ -322,46 +827,88 @@ html, body {
 }
 
 .tab-btn.active {
-  background: var(--color-accent-dim);
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  background: transparent;
+  border-bottom-color: var(--color-accent);
+  color: var(--color-text-primary);
 }
 
-/* ─── Left Panel ─────────────────────────────────────────────────────────── */
-.left-panel {
-  border-right: 1px solid var(--color-panel-border);
+/* ─── Inspector ──────────────────────────────────────────────────────────── */
+.inspector {
+  border-left: 1px solid var(--color-panel-border);
+  background: var(--color-panel-bg);
 }
 
-/* ─── Style Picker Grid ──────────────────────────────────────────────────── */
+.inspector-head {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+.inspector-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+}
+
+/* ─── Style strip under the preview ──────────────────────────────────────── */
+.style-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 8px 16px 10px;
+  background: var(--color-panel-bg);
+  border-top: 1px solid var(--color-panel-border);
+}
+
+.style-strip-label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
 .style-picker-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
   gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .style-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  padding: 8px 4px 6px;
+  justify-content: center;
+  gap: 4px;
+  min-width: 4.5rem;
+  padding: 8px 10px 7px;
   background: var(--color-app-bg);
   border: 1px solid var(--color-panel-border);
   border-radius: var(--radius-md);
   color: var(--color-text-secondary);
   cursor: pointer;
+  font: inherit;
   transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
 }
 
 .style-btn svg {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
 }
 
 .style-btn span {
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .style-btn:hover {
@@ -391,13 +938,15 @@ html, body {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 5;
-  width: 16px;
-  height: 44px;
+  z-index: 10;
+  width: 18px;
+  height: 48px;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 0;
+  line-height: 0;
   background: var(--color-panel-bg);
   border: 1px solid var(--color-panel-border);
   color: var(--color-text-secondary);
@@ -412,8 +961,15 @@ html, body {
 
 .panel-toggle svg { width: 12px; height: 12px; flex-shrink: 0; transition: transform var(--transition-fast); }
 
-.panel-toggle-left  { left: 0; border-left: none; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
-.panel-toggle-right { right: 0; border-right: none; border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.panel-toggle-right {
+  right: var(--panel-inspector-width);
+  border-right: none;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.panel-toggle-right.collapsed {
+  right: 0;
+}
 
 .panel-toggle.collapsed svg { transform: rotate(180deg); }
 
@@ -423,7 +979,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 16px 28px 12px 20px;
   overflow: hidden;
   min-height: 0;
 }
@@ -456,6 +1012,58 @@ html, body {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* Canvas-only video play mode. The browser fullscreen API owns the viewport;
+   this class removes editor chrome while keeping the real canvas active. */
+body.video-playmode #studio {
+  width: 100vw;
+  height: 100vh;
+}
+
+body.video-playmode .studio-topbar,
+body.video-playmode .left-panel,
+body.video-playmode .right-panel,
+body.video-playmode .style-strip,
+body.video-playmode .transport-bar,
+body.video-playmode .panel-toggle {
+  display: none;
+}
+
+body.video-playmode .app-layout,
+body.video-playmode .center-panel,
+body.video-playmode .canvas-area,
+body.video-playmode .canvas-drop-zone {
+  width: 100%;
+  height: 100%;
+}
+
+body.video-playmode .app-layout {
+  display: block;
+}
+
+body.video-playmode .canvas-area {
+  padding: 0;
+}
+
+body.video-playmode .canvas-wrapper {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+}
+
+body.video-playmode .transport-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  background: color-mix(in srgb, var(--color-panel-bg) 88%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--color-panel-border) 85%, transparent);
+  backdrop-filter: blur(10px);
 }
 
 .canvas-wrapper.viz-draggable         { cursor: grab; }
@@ -493,7 +1101,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(13, 17, 23, 0.92);
+  background: var(--color-drop-veil);
   backdrop-filter: blur(2px);
   transition: opacity var(--transition-med);
 }
@@ -519,8 +1127,9 @@ html, body {
 }
 
 .drop-title {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
   color: var(--color-text-primary);
 }
 
@@ -555,8 +1164,8 @@ html, body {
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--color-text-primary);
-  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.72);
   padding: 4px 8px;
   border-radius: var(--radius-sm);
   pointer-events: none;
@@ -567,12 +1176,39 @@ html, body {
 .transport-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   height: var(--transport-height);
-  padding: 0 14px;
+  padding: 0 16px;
   background: var(--color-panel-bg);
   border-top: 1px solid var(--color-panel-border);
   flex-shrink: 0;
+}
+
+.volume-control {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.volume-button {
+  flex-shrink: 0;
+}
+
+.volume-slider {
+  width: 76px;
+  height: 4px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.volume-slider:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .volume-slider { width: 54px; }
 }
 
 .time-label {
@@ -588,20 +1224,24 @@ html, body {
 .scrubber-track {
   flex: 1;
   position: relative;
-  height: 4px;
+  height: 6px;
   background: var(--color-surface-active);
-  border-radius: 2px;
+  border-radius: 999px;
   cursor: pointer;
+  touch-action: none;
 }
 
-.scrubber-track:hover .scrubber-thumb { opacity: 1; transform: scale(1); }
+.scrubber-track:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
+}
 
 .scrubber-fill {
   position: absolute;
   left: 0; top: 0; bottom: 0;
   width: 0%;
   background: var(--color-accent);
-  border-radius: 2px;
+  border-radius: 999px;
   pointer-events: none;
 }
 
@@ -612,16 +1252,27 @@ html, body {
   width: 12px;
   height: 12px;
   background: var(--color-accent);
+  border: 2px solid #fff;
   border-radius: 50%;
-  transform: translateX(-50%) translateY(-50%) scale(0.7);
-  opacity: 0;
-  transition: opacity var(--transition-fast), transform var(--transition-fast);
+  box-sizing: border-box;
+  box-shadow: 0 0 0 1px oklch(0.2 0.03 275 / 0.2);
+  transform: translate(-50%, -50%);
+  opacity: 1;
+  transition: transform var(--transition-fast);
   pointer-events: none;
 }
 
-/* ─── Right Panel ─────────────────────────────────────────────────────────── */
+.scrubber-track:hover .scrubber-thumb {
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+/* ─── Right Panel (inspector) ────────────────────────────────────────────── */
 .right-panel {
-  border-left: 1px solid var(--color-panel-border);
+  min-width: 0;
+}
+
+.inspector.collapsed {
+  border-left-width: 0;
 }
 
 /* Audio metadata block */
@@ -751,13 +1402,39 @@ html, body {
   backdrop-filter: blur(3px);
 }
 
+/* Export dialog styles — dead while `#export-modal` is commented out in
+   index.html. progressModal.js no longer sets `body.exporting` (it always runs
+   minimized and hands progress to the Export Process menu), so these rules
+   only hide the canvas for a dialog that can no longer be shown.
+   To restore: uncomment alongside the markup.
+
+   Export recording is real-time and advances frames on the preview canvas.
+   Use an opaque backdrop so that motion isn't visible behind the modal.
+
+#export-modal.modal-overlay {
+  background: rgba(13, 17, 23, 0.94);
+  backdrop-filter: none;
+}
+
+body.exporting #canvas-wrapper {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.exporting #fps-counter,
+body.exporting #transport-bar {
+  opacity: 0;
+  pointer-events: none;
+}
+
+*/
 .modal {
   background: var(--color-panel-bg);
   border: 1px solid var(--color-panel-border);
   border-radius: var(--radius-lg);
   padding: 32px 36px;
   min-width: 380px;
-  max-width: 480px;
+  max-width: 400px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -801,6 +1478,35 @@ html, body {
   gap: 8px;
 }
 
+.confirm-modal {
+  min-width: min(420px, calc(100vw - 32px));
+  gap: 16px;
+}
+
+.confirm-message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+  white-space: pre-line;
+}
+
+.confirm-actions {
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.confirm-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+
+.confirm-primary:hover {
+  background: color-mix(in oklch, var(--color-accent) 88%, white);
+  border-color: color-mix(in oklch, var(--color-accent) 88%, white);
+}
+
 .mt-4 { margin-top: 4px; }
 
 .btn-destructive {
@@ -817,7 +1523,7 @@ html, body {
 }
 
 .btn-destructive:hover {
-  background: rgba(255, 107, 53, 0.12);
+  background: color-mix(in oklch, var(--color-destructive) 12%, transparent);
 }
 
 /* ─── Encoder Badge ──────────────────────────────────────────────────────────── */
@@ -834,7 +1540,7 @@ html, body {
   vertical-align: middle;
 }
 .encoder-badge.hw {
-  background: rgba(0, 212, 255, 0.12);
+  background: var(--color-accent-dim);
   color: var(--color-accent);
 }
 
@@ -854,32 +1560,215 @@ html, body {
   margin: 0;
 }
 
-/* ─── About Modal ────────────────────────────────────────────────────────────── */
-.about-modal { max-width: 420px; }
+/* ─── About ──────────────────────────────────────────────────────────────── */
+.about-modal {
+  position: relative;
+  width: min(380px, calc(100vw - 32px));
+  min-width: 0;
+  max-width: 380px;
+  padding: 28px 28px 24px;
+  gap: 0;
+  box-shadow: 0 16px 48px oklch(0.12 0.04 275 / 0.45);
+}
 
-.about-tagline {
-  font-size: 12px;
+html[data-theme="light"] #about-modal.modal-overlay {
+  background: oklch(0.32 0.03 275 / 0.38);
+}
+
+.about-dismiss {
+  appearance: none;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.about-dismiss svg {
+  width: 14px;
+  height: 14px;
+}
+
+.about-dismiss:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.about-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding-right: 28px;
+  margin-bottom: 18px;
+}
+
+.about-mark {
+  width: 28px;
+  height: 28px;
+  color: var(--color-accent);
+  margin-bottom: 6px;
+}
+
+.about-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  color: var(--color-text-primary);
+}
+
+.about-lead {
+  margin: 0;
+  font-size: 13px;
   color: var(--color-text-secondary);
+}
+
+.about-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+}
+
+.about-edition,
+.about-version {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.about-edition {
+  background: var(--color-surface-active);
+  color: var(--color-text-secondary);
+}
+
+.about-version {
+  background: var(--color-accent-dim);
+  color: var(--color-accent);
+}
+
+.about-note {
+  margin: 0 0 18px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.about-credits {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0 0 18px;
+  padding: 4px 0;
+  border-top: 1px solid var(--color-panel-border);
+  border-bottom: 1px solid var(--color-panel-border);
+}
+
+.about-credits div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px 0;
+}
+
+.about-credits div + div {
+  border-top: 1px solid color-mix(in oklch, var(--color-panel-border) 70%, transparent);
+}
+
+.about-credits dt {
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-text-secondary);
+}
+
+.about-credits dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
 }
 
 .about-section {
-  border-top: 1px solid var(--color-panel-border);
-  padding-top: 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
-.about-license {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  line-height: 1.7;
+.about-section-label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.about-licenses {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.about-licenses li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid color-mix(in oklch, var(--color-panel-border) 70%, transparent);
+}
+
+.about-licenses li:last-child,
+.about-licenses li:not(:has(+ li:not(.hidden))) {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.about-lic-name {
+  font-size: 12.5px;
+  color: var(--color-text-primary);
+}
+
+.about-lic-id {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+  text-align: right;
+}
+
+.about-ffmpeg-note {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
 }
 
 .about-url {
   color: var(--color-accent);
-  font-family: var(--font-mono);
-  font-size: 11px;
 }
 
 /* ─── Update Banner ───────────────────────────────────────────────────────── */
@@ -888,7 +1777,7 @@ html, body {
   align-items: center;
   gap: 10px;
   padding: 7px 14px;
-  background: #0f2a35;
+  background: color-mix(in oklch, var(--color-accent) 14%, var(--color-panel-bg));
   border-bottom: 1px solid var(--color-accent);
   font-size: 12px;
   color: var(--color-text-primary);
@@ -922,7 +1811,7 @@ html, body {
   flex-shrink: 0;
   padding: 3px 10px;
   background: var(--color-accent);
-  color: #000;
+  color: var(--color-accent-ink);
   border: none;
   border-radius: 4px;
   font-size: 12px;
@@ -930,7 +1819,19 @@ html, body {
   cursor: pointer;
 }
 
-.update-install-btn:hover { background: #00bde6; }
+.update-install-btn:hover {
+  background: color-mix(in oklch, var(--color-accent) 86%, white);
+}
+
+.update-github-link {
+  flex-shrink: 0;
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.update-github-link:hover { text-decoration: underline; }
 
 .update-dismiss-btn {
   flex-shrink: 0;
@@ -951,3 +1852,89 @@ html, body {
 .mt-8  { margin-top: 8px; }
 .ml-8  { margin-left: 8px; }
 .w-full { width: 100%; }
+
+/* ─── Keyboard / a11y ─────────────────────────────────────────────────────── */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+input, textarea, select, [contenteditable] {
+  user-select: text;
+}
+
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -40px;
+  z-index: 200;
+  padding: 8px 12px;
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+.skip-link:focus {
+  top: 8px;
+}
+
+/* Web session status — plain text in the top bar; display-only */
+.web-session-bar {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+.web-session-bar[data-state="unsaved"] {
+  color: var(--color-text-secondary);
+}
+
+.web-session-bar[data-state="saved"],
+.web-session-bar[data-state="imported"],
+.web-session-bar[data-state="opened"] {
+  color: var(--color-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* Browser layout: overlay side panels on narrower viewports so the preview stays usable. */
+@media (max-width: 960px) {
+  .app-name { display: none; }
+  body[data-platform="web"] .app-layout {
+    grid-template-columns: 1fr !important;
+  }
+  body[data-platform="web"] .inspector {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 8;
+    width: min(320px, 88vw);
+    box-shadow: 0 12px 40px oklch(0.12 0.03 275 / 0.35);
+  }
+  body[data-platform="web"] .inspector.collapsed {
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
+  }
+  body[data-platform="web"] .panel-toggle-right {
+    z-index: 11;
+    right: min(320px, 88vw);
+  }
+  body[data-platform="web"] .panel-toggle-right.collapsed {
+    right: 0;
+  }
+  body[data-platform="web"] .studio-export .export-hint {
+    display: none;
+  }
+}

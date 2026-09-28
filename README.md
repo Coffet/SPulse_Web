@@ -1,28 +1,73 @@
-# SPulse
+# SPulse: Web Version
 
-[![Latest Release](https://img.shields.io/github/v/release/senriki/SPulse?label=release&style=flat-square&logo=github)](https://github.com/senriki/SPulse/releases/latest)
-[![License](https://img.shields.io/github/license/senriki/SPulse?style=flat-square)](./LICENSE)
-[![Downloads](https://img.shields.io/github/downloads/senriki/SPulse/total?style=flat-square&logo=github)](https://github.com/senriki/SPulse/releases)
-[![CI](https://img.shields.io/github/actions/workflow/status/senriki/SPulse/ci.yml?branch=main&label=CI&style=flat-square&logo=githubactions)](https://github.com/senriki/SPulse/actions/workflows/ci.yml)
+[Latest Release](https://github.com/senriki/SPulse/releases/latest)
+[License](./LICENSE)
+[Downloads](https://github.com/senriki/SPulse/releases)
+[CI](https://github.com/senriki/SPulse/actions/workflows/ci.yml)
 
-Desktop app for creating MP4 waveform visualizer videos from audio files. Runs fully offline.
+SPulse is a waveform visualizer you can run in the **browser** or as a **desktop** app. Same editor, same styles — no accounts, no database.
 
-![SPulse preview](docs/assets/img/preview.png)
-
-Built with Electron, Web Audio API, Canvas 2D, and FFmpeg.
+Desktop app by [Senriki](https://github.com/senriki). Web version and UI rebuild by [Coffet](https://github.com/Coffet).
 
 Made for the [Singularity Pulse](https://singularitypulse.com) community. Find it with the other creator resources at [singularitypulse.com/resources](https://singularitypulse.com/resources#spulse).
 
+- **Web** — Node/Express serves the static UI. Design, export **WebM** (MediaRecorder, up to 1080p / 30fps, real time), and download a portable `.spulse` project. Refreshing the tab discards the session unless you saved that file.
+- **Desktop** — Electron + bundled FFmpeg. Offline **MP4** export (up to 4K / 60fps, GPU encoders), last-session restore, recent files, and auto-update.
+
+The web **landing** stays the original dark cyan start screen. The **studio** is a Figma-style editor: top bar, large canvas, style chips under the preview, and one right inspector (Look / Scene / Export). Light and dark themes apply to the studio only.
+
+![SPulse landing](docs/preview-landing.png)
+
+![SPulse studio, dark theme](docs/preview-studio.png)
+
+![SPulse studio, light theme](docs/preview-studio-light.png)
+
+Built with vanilla JS, Web Audio API, Canvas 2D, Express (web host), and Electron + FFmpeg (desktop).
+
 ---
 
-## Download
+## Use in the browser
 
-| Platform | Link |
-|---|---|
-| Windows 10/11 | [Download .exe](https://github.com/senriki/SPulse/releases/latest/download/SPulse-latest-win.exe) |
-| macOS (Apple Silicon, macOS 13 Ventura+) | [Download .dmg](https://github.com/senriki/SPulse/releases/latest/download/SPulse-latest-mac-arm64.dmg) |
-| macOS (Intel, macOS 13 Ventura+) | [Download .dmg](https://github.com/senriki/SPulse/releases/latest/download/SPulse-latest-mac-x64.dmg) |
-| Linux | [Download .AppImage](https://github.com/senriki/SPulse/releases/latest/download/SPulse-latest-linux.AppImage) |
+```bash
+npm install
+npm run start:web
+```
+
+That runs `node server.js` and should stay in the foreground:
+
+```
+SPulse web  http://localhost:3000  (v1.4.0)
+```
+
+Leave that terminal open. Open **[http://localhost:3000](http://localhost:3000)**. Pick **New project** or **Import project** (`.spulse` / `.spx`), then load audio and design as usual.
+
+**Stop the server** with **Ctrl+C** in that same terminal. There is no `npm stop`. If the `PS>` / `$` prompt comes back right after the URL, the process already exited (usually port 3000 is taken) — Ctrl+C will not help. On Windows, find and kill the leftover process, then start again:
+
+```powershell
+netstat -ano | findstr :3000
+taskkill /PID <pid> /F
+npm run start:web
+```
+
+`npm start` launches the **Electron desktop** app, not the browser server.
+
+The server only hosts files from `src/` (plus `/api/version` and `/api/upstream` for the update check). Encoding happens in the visitor’s browser. There is no upload API and no login.
+
+When `senriki/SPulse` `main` is ahead of this host, a banner offers **Reload** (after you pull/redeploy) or **View on GitHub**. Help → Check for Updates… does the same check on demand.
+
+To keep work, use **Export Project** / Ctrl+S for a `.spulse` file. Open that file in the desktop app if you need MP4.
+
+---
+
+## Download (desktop)
+
+| Platform                                 | Link                                                                                                          |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Windows 10/11                            | [Download .exe](https://github.com/senriki/SPulse/releases/latest/download/SPulse-latest-win.exe)             |
+| macOS (Apple Silicon, macOS 13 Ventura+) | [Download .dmg](https://github.com/senriki/SPulse/releases/latest/download/SPulse-latest-mac-arm64.dmg)       |
+| macOS (Intel, macOS 13 Ventura+)         | [Download .dmg](https://github.com/senriki/SPulse/releases/latest/download/SPulse-latest-mac-x64.dmg)         |
+| Linux                                    | [Download .AppImage](https://github.com/senriki/SPulse/releases/latest/download/SPulse-latest-linux.AppImage) |
+
 
 Links always point to the latest stable release. Looking for a portable Windows build, older versions, or a release candidate? See [all releases](https://github.com/senriki/SPulse/releases).
 
@@ -32,32 +77,42 @@ Links always point to the latest stable release. Looking for a portable Windows 
 
 ## Requirements
 
+**Web**
+
 - Node.js 22.12+
 - npm 10+
+- A current Chromium-based browser (Chrome / Edge) recommended for MediaRecorder export
+
+**Desktop**
+
+- Same Node/npm for building from source
 - A display (Windows or macOS host; WSL2 headless is not supported)
 
 ## Getting Started
 
 ```bash
 npm install
-npm start
+npm run start:web  # web app at http://localhost:3000 — stop with Ctrl+C
+npm start          # Electron desktop
 ```
 
-On Linux/macOS/WSL, `make run` works the same way if you have Make installed.
+On Linux/macOS/WSL, `make run-web` / `make run` work the same way if you have Make installed.
 
 ## Commands
 
-| npm script | `make` equivalent (Unix only) | Description |
-|---|---|---|
-| `npm start` | `make run` | Start the app in development mode |
-| `npm install` | `make install` | Install dependencies |
-| `npm run build` | `make build` | Package for the current platform |
-| `npm run build:win` | `make build-win` | Build Windows installer (.exe via NSIS) |
-| `npm run build:win:portable` | `make build-win-portable` | Build Windows portable .exe (no install needed, good for quick testing) |
-| `npm run build:mac` | `make build-mac` | Build macOS disk image (.dmg) |
-| `npm run build:linux` | `make build-linux` | Build Linux AppImage |
-| `npm run icon` | `make icon` | Regenerate app icons in `build/` |
-| `npm run clean` | `make clean` | Remove `dist/` and `out/` build artifacts |
+| npm script                   | `make` equivalent (Unix only) | Description                                                             |
+| ---------------------------- | ----------------------------- | ----------------------------------------------------------------------- |
+| `npm run start:web`          | `make run-web`                | Start the web app at [http://localhost:3000](http://localhost:3000). Stop with Ctrl+C in that terminal. |
+| `npm start`                  | `make run`                    | Start the Electron desktop app                                          |
+| `npm install`                | `make install`                | Install dependencies                                                    |
+| `npm run build`              | `make build`                  | Package for the current platform                                        |
+| `npm run build:win`          | `make build-win`              | Build Windows installer (.exe via NSIS)                                 |
+| `npm run build:win:portable` | `make build-win-portable`     | Build Windows portable .exe (no install needed, good for quick testing) |
+| `npm run build:mac`          | `make build-mac`              | Build macOS disk image (.dmg)                                           |
+| `npm run build:linux`        | `make build-linux`            | Build Linux AppImage                                                    |
+| `npm run icon`               | `make icon`                   | Regenerate app icons in `build/`                                        |
+| `npm run clean`              | `make clean`                  | Remove `dist/` and `out/` build artifacts                               |
+
 
 The `npm run ...` commands work on every platform, including Windows without Make installed. The `Makefile` is an optional convenience shortcut for Unix-like shells (Linux/macOS/WSL).
 
@@ -67,28 +122,35 @@ Output is written to `dist/`.
 
 ## Features
 
-- **Import**: MP3, WAV, FLAC, AAC, OGG, M4A — drag-and-drop or Ctrl+O
+- **Studio**: top bar (audio, undo/redo, theme, export), large canvas, style chips, one inspector — Look (waveform), Scene (background + overlay), Export
+- **Light / dark**: studio theme toggle, remembered in the browser. Landing always stays dark cyan
+- **Import**: MP3, WAV, FLAC, AAC, OGG, M4A — drag-and-drop, **Open audio** in the top bar, or Ctrl+O. Loading a new file replaces the current track (playback included)
 - **6 visualizer styles**: Classic Bar, Mirror Bar, Smooth Line, Filled Wave, Radial Pulse, Spectrum Glow
-- **Drag to reposition**: click and drag the visualizer directly on the canvas to adjust its vertical position — syncs with the Y Offset slider in the panel
-- **Backgrounds**: solid color, linear gradient, static image (with blur/darken), looping video — thumbnail preview appears in the panel immediately after selecting a file
-- **Text overlay**: title + artist, 5 positions, custom XY, font/size/color/opacity
-- **Export**: MP4 via FFmpeg — Full HD, 4K, Shorts/Reels (9:16), Square (1:1), or custom resolution; 24/30/60 fps; H.264 or H.265; hardware-accelerated encoding via NVIDIA NVENC, AMD AMF, or Intel QSV (auto-detected, with manual override)
-- **Project save/load**: `.spx` JSON format preserves all settings and the audio file path
+- **Drag to reposition**: click and drag the visualizer on the canvas — syncs with Y Offset in Look
+- **Backgrounds**: solid color, linear gradient, static image (with blur/darken), looping video — thumbnail preview in Scene after you pick a file
+- **Text overlay**: title + artist, 5 positions, custom XY, font/size/color/opacity (Scene)
+- **Export (web)**: WebM via MediaRecorder, capped at 1080p / 30fps, recorded in real time in the browser
+- **Export (desktop)**: MP4 via FFmpeg (Full HD, 4K, Shorts/Reels, Square, custom; 24/30/60 fps; H.264/H.265; NVENC/AMF/QSV)
+- **Landing (web)**: first screen offers New project or Import project; desktop skips this and opens the studio
+- **Projects**: portable `.spulse` (embedded audio, works web ↔ desktop); desktop can also save `.spx` on this device
 - **Undo/redo**: 20-step history for visualizer style changes (Ctrl+Z / Ctrl+Y)
-- **Auto-update**: checks GitHub Releases on startup and downloads updates in the background; a banner appears when a new version is ready to install
+- **Desktop extras**: last-session restore, recent files, auto-update from GitHub Releases
 
 ## Keyboard Shortcuts
 
-| Shortcut | Action |
-|---|---|
-| `Ctrl+O` | Open audio file |
-| `Space` | Play / Pause |
-| `Ctrl+E` | Start export |
-| `Ctrl+S` | Save project |
-| `Ctrl+Z` | Undo |
-| `Ctrl+Y` | Redo |
-| `Ctrl+Q` | Quit |
-| `Escape` | Close modal |
+| Shortcut       | Action                                     |
+| -------------- | ------------------------------------------ |
+| `Ctrl+O`       | Open audio file                            |
+| `Ctrl+N`       | New session                                |
+| `Ctrl+Shift+R` | Reset settings (keep audio)                |
+| `Space`        | Play / Pause                               |
+| `Ctrl+E`       | Start export                               |
+| `Ctrl+S`       | Save / download project (`.spulse` on web) |
+| `Ctrl+Z`       | Undo                                       |
+| `Ctrl+Y`       | Redo                                       |
+| `F11`          | Toggle canvas fullscreen                   |
+| `Ctrl+Q`       | Quit (desktop)                             |
+| `Escape`       | Close modal                                |
 
 ---
 
@@ -157,7 +219,7 @@ Stable builds are tagged `vX.Y.Z` and published as the "Latest Release" on GitHu
 
 ## Contributing
 
-Want to help? See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for dev setup, code style, commit conventions, and how to submit a PR.
+Want to help? See [CONTRIBUTING.md](./CONTRIBUTING.md) for dev setup, code style, commit conventions, and how to submit a PR.
 
 ---
 
@@ -169,11 +231,22 @@ The app's Help > About screen lists all open-source component licenses as requir
 
 ---
 
+## Credits
+
+| Role | Credit |
+|---|---|
+| Original desktop app | [Senriki](https://github.com/senriki) — Electron, FFmpeg export, visualizer engine |
+| Web version & UI rebuild | [Coffet](https://github.com/Coffet) — browser runtime, landing, and rebuilt editor UI |
+
+This repo is a fork of [senriki/SPulse](https://github.com/senriki/SPulse).
+
+---
+
 ## Connect
 
-If you'd like to follow along or support future development:
+If you'd like to follow along or support Senriki’s desktop work:
 
-[![X](https://img.shields.io/badge/X-%40SenrikiSorani-black?logo=x&style=flat-square)](https://x.com/SenrikiSorani)
-[![Website](https://img.shields.io/badge/website-singularitypulse.com-blueviolet?style=flat-square)](https://singularitypulse.com/)
-[![Patreon](https://img.shields.io/badge/Patreon-support-f96854?logo=patreon&logoColor=white&style=flat-square)](https://www.patreon.com/cw/SenrikiSorani)
-[![YouTube](https://img.shields.io/badge/YouTube-%40senrikis-red?logo=youtube&logoColor=white&style=flat-square)](https://www.youtube.com/@senrikis)
+[X](https://x.com/SenrikiSorani)
+[Website](https://singularitypulse.com/)
+[Patreon](https://www.patreon.com/cw/SenrikiSorani)
+[YouTube](https://www.youtube.com/@senrikis)

@@ -110,3 +110,22 @@ export function resetVisualizerStateToDefaults() {
   Object.assign(visualizerState.background, defaultBg)
   Object.assign(visualizerState.overlay, defaultOv)
 }
+
+export function isVisualizerStateAtDefaults() {
+  const defaults = _createDefaultVisualizerState()
+  return isDeepEqual(visualizerState, defaults)
+}
+
+function isDeepEqual(a, b) {
+  if (a === b) return true;
+  if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) return false;
+  // Ignore DOM elements/references (imageEl, videoEl)
+  const keysA = Object.keys(a).filter(k => k !== 'imageEl' && k !== 'videoEl');
+  const keysB = Object.keys(b).filter(k => k !== 'imageEl' && k !== 'videoEl');
+  if (keysA.length !== keysB.length) return false;
+  for (const key of keysA) {
+    if (!keysB.includes(key)) return false;
+    if (!isDeepEqual(a[key], b[key])) return false;
+  }
+  return true;
+}

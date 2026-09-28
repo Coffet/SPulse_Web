@@ -10,6 +10,7 @@
   },
   "scripts": {
     "start": "electron .",
+    "start:web": "node server.js",
     "build": "electron-builder --config electron-builder.config.js",
     "build:win": "electron-builder --config electron-builder.config.js --win",
     "build:win:portable": "electron-builder --config electron-builder.config.js --win portable --publish never",
@@ -20,7 +21,9 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "compression": "^1.8.2",
     "electron-updater": "^6.8.9",
+    "express": "^5.2.1",
     "ffmpeg-static": "^5.2.0",
     "fluent-ffmpeg": "^2.1.3"
   },

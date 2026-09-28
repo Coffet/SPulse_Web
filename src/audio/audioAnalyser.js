@@ -5,7 +5,11 @@ export class AudioAnalyser {
     this.analyserNode = audioContext.createAnalyser()
     this.analyserNode.fftSize = 2048
     this.analyserNode.smoothingTimeConstant = 0.8
-    this.analyserNode.connect(audioContext.destination)
+    this._playbackGain = audioContext.createGain()
+    this._playbackGain.gain.value = 1
+    this._volume = 1
+    this.analyserNode.connect(this._playbackGain)
+    this._playbackGain.connect(audioContext.destination)
 
     // Stereo analysis (Feature A) — additive to the mono path above, which stays
     // the default/fallback and remains the only path connected for actual playback.
@@ -67,6 +71,19 @@ export class AudioAnalyser {
     this.analyserNode.smoothingTimeConstant = v
     this.analyserL.smoothingTimeConstant = v
     this.analyserR.smoothingTimeConstant = v
+  }
+
+  setOutputMuted(muted) {
+    this._playbackGain.gain.value = muted ? 0 : this._volume
+  }
+
+  setVolume(value) {
+    this._volume = Math.max(0, Math.min(1, Number(value) || 0))
+    this._playbackGain.gain.value = this._volume
+  }
+
+  get volume() {
+    return this._volume
   }
 
   play() {

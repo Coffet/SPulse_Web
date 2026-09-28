@@ -324,7 +324,8 @@ export class VideoBackground {
 }
 
 function _toFileURL(filePath) {
-  if (filePath.startsWith('file://')) return filePath
+  if (!filePath) return filePath
+  if (/^(blob:|file:|https?:)/i.test(filePath)) return filePath
   const normalized = filePath.replace(/\\/g, '/')
   return normalized.startsWith('/') ? `file://${normalized}` : `file:///${normalized}`
 }

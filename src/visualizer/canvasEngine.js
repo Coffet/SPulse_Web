@@ -12,12 +12,13 @@ const MODES = {
 // renders at the true target size via setExportResolution).
 const PREVIEW_MAX_DIM = 1280
 
-class CanvasEngine {
-  constructor() {
+export class CanvasEngine {
+  constructor({ exportOnly = false } = {}) {
     this.r2d     = null   // Renderer2D — set after audio loads
     this.running = false
     this._rafId  = null
     this._appState = null
+    this._exportAnalyser = null
 
     // FPS tracking
     this._lastTs    = 0
@@ -39,11 +40,21 @@ class CanvasEngine {
     this._previewW = null
     this._previewH = null
 
-    window.addEventListener('audio-loaded', e => this._onAudioLoaded(e.detail))
+    if (!exportOnly) window.addEventListener('audio-loaded', e => this._onAudioLoaded(e.detail))
   }
 
   // Called by renderer.js after its own _updateScrubber function is defined
   setUpdateScrubber(fn) { this._scrubberFn = fn }
+
+  setExportAnalyser(analyser) { this._exportAnalyser = analyser || null }
+
+  initExport(appState, canvas) {
+    this._appState = appState
+    this.r2d = new Renderer2D(canvas)
+    this._fpsEl = null
+    this._previewW = 1280
+    this._previewH = 720
+  }
 
   // Task-6 registers each additional mode here
   registerMode(id, fn) { MODES[id] = fn }
@@ -86,6 +97,8 @@ class CanvasEngine {
   start() {
     if (this.running || !this.r2d) return
     this.running = true
+    this._fpsFrames = 0
+    this._fpsAccum  = 0
     this._lastTs = performance.now()
     this._loop()
   }
@@ -93,6 +106,7 @@ class CanvasEngine {
   stop() {
     this.running = false
     if (this._rafId) { cancelAnimationFrame(this._rafId); this._rafId = null }
+    this._resetFpsDisplay()
     // Render one static frame so canvas shows current state while paused
     this._drawFrame(performance.now())
   }
@@ -107,6 +121,7 @@ class CanvasEngine {
     // defaulting to 16:9 if none has been set yet.
     this._resizePreviewCanvas(this._previewW ?? 1280, this._previewH ?? 720)
     this._fpsEl = document.getElementById('fps-counter')
+    this._resetFpsDisplay()
     this._fitWrapper()
     window.addEventListener('resize', () => this._fitWrapper())
     // Draw one idle frame immediately so the canvas isn't black
@@ -132,6 +147,12 @@ class CanvasEngine {
     wrapper.style.height = `${Math.floor(h)}px`
   }
 
+  _resetFpsDisplay() {
+    this._fpsFrames = 0
+    this._fpsAccum  = 0
+    if (this._fpsEl) this._fpsEl.textContent = '-- fps'
+  }
+
   _loop() {
     if (!this.running) return
     this._rafId = requestAnimationFrame(ts => {
@@ -142,7 +163,8 @@ class CanvasEngine {
 
   _drawFrame(ts) {
     if (!this.r2d || !this._appState) return
-    const { analyser, audioLoader } = this._appState
+    const { audioLoader } = this._appState
+    const analyser = this._exportAnalyser || this._appState.analyser
     const { canvas, ctx } = this.r2d
     const W = canvas.width
     const H = canvas.height
@@ -197,7 +219,7 @@ class CanvasEngine {
     }
 
     // ── Scrubber + time ────────────────────────────────────────────────────
-    if (this._scrubberFn && audioLoader) {
+    if (this._scrubberFn && audioLoader && !this._exportAnalyser) {
       this._scrubberFn(analyser ? analyser.currentTime : 0, audioLoader.duration)
     }
   }

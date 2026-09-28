@@ -84,11 +84,18 @@ export function serializeState(audioFilePath) {
 // access — contextIsolation is on), returning enough metadata to reconstruct it on
 // import. Returns null (not throw) if filePath is falsy or the read fails, so a missing
 // asset degrades the export rather than aborting it.
-async function _embedAsset(filePath) {
+function _filenameFromPath(filePath) {
+  if (!filePath) return 'asset'
+  if (filePath.startsWith('blob:')) return 'asset'
+  return filePath.replace(/.*[\\/]/, '') || 'asset'
+}
+
+async function _embedAsset(filePath, fallbackName) {
   if (!filePath) return null
   const result = await window.api.readFileAsBase64(filePath)
   if (!result || result.error) return null
-  return { filename: filePath.replace(/.*[\\/]/, ''), data: result.data }
+  const filename = fallbackName || _filenameFromPath(filePath)
+  return { filename, data: result.data }
 }
 
 // Build a portable, device-independent export payload (Feature C, Option 1 from the
@@ -100,12 +107,12 @@ export async function serializePortableState(audioFilePath) {
   const data = serializeState(audioFilePath)
   data.version = SPX_PORTABLE_VERSION
 
-  data.audioAsset = await _embedAsset(audioFilePath)
+  data.audioAsset = await _embedAsset(audioFilePath, window.appState?.fileName)
   data.audioPath  = ''
 
   const bg = data.visualizer.background
-  bg.imageAsset = await _embedAsset(bg.imagePath)
-  bg.videoAsset = await _embedAsset(bg.videoPath)
+  bg.imageAsset = await _embedAsset(bg.imagePath, window.api.assetName?.(bg.imagePath))
+  bg.videoAsset = await _embedAsset(bg.videoPath, window.api.assetName?.(bg.videoPath))
   bg.imagePath  = null
   bg.videoPath  = null
 

@@ -1,7 +1,7 @@
 import { AudioLoader }     from './audio/audioLoader.js'
 import { AudioAnalyser }   from './audio/audioAnalyser.js'
 import { canvasEngine }    from './visualizer/canvasEngine.js'
-import { visualizerState, resetVisualizerStateToDefaults } from './visualizer/visualizerState.js'
+import { visualizerState, resetVisualizerStateToDefaults, isVisualizerStateAtDefaults } from './visualizer/visualizerState.js'
 import { initLeftPanel }   from './controls/leftPanel.js'
 import { initPanelTabs }   from './controls/panelTabs.js'
 import { initStylePicker }      from './controls/stylePicker.js'
@@ -10,13 +10,18 @@ import { backgroundRenderer }   from './background/backgroundRenderer.js'
 import { textOverlay }          from './overlay/textOverlay.js'
 import { initOverlayControls }  from './controls/overlayControls.js'
 import { initMenuBar }          from './controls/menuBar.js'
-import { startExport }               from './export/exportPipeline.js'
-import { exportSettings, resetExportSettingsToDefaults } from './export/exportSettings.js'
+import { startExport, isExporting }               from './export/exportPipeline.js'
+import { applyWebExportLimitsToDom, capWebExport, isWebExporting } from './export/webRecorder.js'
+import { exportSettings, resetExportSettingsToDefaults, isExportSettingsAtDefaults } from './export/exportSettings.js'
 import { serializeState, deserializeState, serializePortableState } from './project/projectManager.js'
 import { historyManager }                  from './history/historyManager.js'
 import { initErrorDialog }                 from './ui/errorDialog.js'
 import { initAboutScreen, showAbout }      from './ui/aboutScreen.js'
+import { initConfirmDialog } from './ui/confirmDialog.js'
 import { initUpdateBanner, checkForUpdatesManually } from './ui/updateBanner.js'
+import { initTheme }                       from './ui/theme.js'
+import { ensurePlatformApi, isWeb }        from './platform/webApi.js'
+import { exportMissionManager }             from './export/exportMissionManager.js'
 import { drawBarMirror }   from './visualizer/modes/barMirror.js'
 import { drawLineSmooth }  from './visualizer/modes/lineSmooth.js'
 import { drawLineFill }    from './visualizer/modes/lineFill.js'
@@ -33,9 +38,21 @@ export const appState = {
 }
 window.appState = appState   // expose for non-module script interop if needed
 
+ensurePlatformApi()
+exportMissionManager.init()
+
+function _defaultProjectHint() {
+  return isWeb()
+    ? 'Ctrl+S downloads your project'
+    : 'Ctrl+S to save'
+}
+
 // ─── Project state ────────────────────────────────────────────────────────────
 let _projectFilePath = null   // path of the currently open .spx file
 let _isDirty         = false  // true when state has changed since last save/load
+let _webClean        = null   // session fingerprint at last save / import / download
+let _webSessionKind  = null   // web status text: 'imported' | 'opened' | 'saved'
+let _audioLoadGeneration = 0
 
 // ─── Auto-load last-used project/settings on launch ──────────────────────────
 // State only, applied here before anything below reads visualizerState/exportSettings.
@@ -68,10 +85,12 @@ const timeCurrent   = document.getElementById('time-current')
 const timeTotal     = document.getElementById('time-total')
 const btnOpenAudio  = document.getElementById('btn-open-audio')
 const btnExport     = document.getElementById('btn-export')
+const studioExport  = document.querySelector('.studio-export')
 const exportHint    = document.getElementById('export-hint')
 const audioInfoEmpty = document.getElementById('audio-info-empty')
 const btnFullscreen = document.getElementById('btn-fullscreen')
-const toggleLeftPanel  = document.getElementById('toggle-left-panel')
+const btnVolume     = document.getElementById('btn-volume')
+const volumeSlider  = document.getElementById('volume-slider')
 const toggleRightPanel = document.getElementById('toggle-right-panel')
 const appLayout     = document.querySelector('.app-layout')
 const audioMeta     = document.getElementById('audio-meta')
@@ -84,20 +103,33 @@ const overlayTitle  = document.getElementById('overlay-title')
 const overlayArtist = document.getElementById('overlay-artist')
 
 // ─── Load audio from ArrayBuffer + file path ─────────────────────────────────
-async function loadAudio(arrayBuffer, filePath) {
+async function loadAudio(arrayBuffer, filePath, displayName, { markDirty = true, generation = ++_audioLoadGeneration } = {}) {
   _setDropMessage('⟳ Decoding…', true)
 
   try {
     const loader = new AudioLoader()
-    await loader.load(arrayBuffer, filePath)
+    await loader.load(arrayBuffer, displayName || filePath)
+    if (_isLoadStale(generation)) {
+      _revokeBlobUrl(filePath, '')
+      _resetDropMessage()
+      return
+    }
 
     const analyser = new AudioAnalyser(loader.audioContext)
     analyser.setBuffer(loader.audioBuffer)
     analyser.onEnded = () => _onPlaybackEnded()
 
+    // Decode first so a bad second file doesn't kill the track that's already loaded.
+    // Then tear down the previous AudioContext — otherwise it keeps playing and the
+    // canvas/play button stay wired to a mix of old source + new analyser.
+    const prevPath = appState.filePath
+    const wasPlaying = !!appState.analyser?.isPlaying
+    _unloadAudio()
+    _revokeBlobUrl(prevPath, filePath)
+
     appState.loaded      = true
     appState.filePath    = filePath
-    appState.fileName    = loader.fileName
+    appState.fileName    = displayName || loader.fileName
     appState.audioLoader = loader
     appState.analyser    = analyser
 
@@ -105,37 +137,54 @@ async function loadAudio(arrayBuffer, filePath) {
     _enableTransport(loader.duration)
     dropOverlay.classList.add('hidden')
 
-    // Pre-fill overlay text fields with parsed metadata
-    // Setting .value directly doesn't fire 'input', so mirror into state too
-    if (overlayTitle  && loader.metadata.title) {
-      overlayTitle.value = loader.metadata.title
-      visualizerState.overlay.title = loader.metadata.title
+    // Always replace overlay copy from the new file so the previous track's
+    // title/artist don't stick around when the next file has none.
+    if (overlayTitle) {
+      overlayTitle.value = loader.metadata.title || ''
+      visualizerState.overlay.title = loader.metadata.title || ''
     }
-    if (overlayArtist && loader.metadata.artist) {
-      overlayArtist.value = loader.metadata.artist
-      visualizerState.overlay.artist = loader.metadata.artist
+    if (overlayArtist) {
+      overlayArtist.value = loader.metadata.artist || ''
+      visualizerState.overlay.artist = loader.metadata.artist || ''
     }
 
     // Suggest default output filename and sync exportSettings
     const baseName = loader.fileName.replace(/\.[^.]+$/, '')
-    const defaultFilename = `${baseName}-spulse.mp4`
+    const defaultFilename = isWeb() ? `${baseName}-spulse.webm` : `${baseName}-spulse.mp4`
     if (outputFilename) outputFilename.value = defaultFilename
     exportSettings.filename    = defaultFilename
     exportSettings.outputPath  = ''   // clear any previous explicit path
 
     // Notify canvas engine (task-4 listens for this)
     window.dispatchEvent(new CustomEvent('audio-loaded', { detail: appState }))
-    _setDirty()
+    if (markDirty) {
+      _webSessionKind = null
+      _setDirty()
+    }
+
+    if (wasPlaying) {
+      appState.analyser.play()
+      canvasEngine.start()
+      _syncPlayIcon(true)
+    }
 
     // Clear a lingering "Audio not found" warning (see _applyProjectData) now that a
     // file loaded successfully — this is the audio re-link flow completing.
     const hint = document.getElementById('project-hint')
-    if (hint?.textContent.startsWith('Audio not found')) hint.textContent = 'Ctrl+S to save'
+    if (hint?.textContent.startsWith('Audio not found')) hint.textContent = _defaultProjectHint()
   } catch (err) {
     console.error('Audio decode failed:', err)
     _setDropMessage('✕ Could not decode file', false)
     setTimeout(() => _resetDropMessage(), 2500)
   }
+}
+
+function _isLoadStale(generation) {
+  return generation !== _audioLoadGeneration || _isInteractionBlocked('session')
+}
+
+function _invalidatePendingAudioLoads() {
+  _audioLoadGeneration += 1
 }
 
 // ─── Metadata UI update ───────────────────────────────────────────────────────
@@ -146,18 +195,45 @@ function _updateMetaUI(loader) {
   metaDuration.textContent = _fmtTime(loader.duration)
   audioInfoEmpty.classList.add('hidden')
   audioMeta.classList.remove('hidden')
+  _setStudioTrackName(appState.fileName || loader.fileName || 'Audio loaded')
+  _setStudioTrackEmpty(false)
+}
+
+function _syncVolumeUi(value) {
+  const percent = Math.round(Math.max(0, Math.min(1, value)) * 100)
+  const muted = percent === 0
+  volumeSlider?.setAttribute('aria-valuetext', `${percent}%`)
+  btnVolume?.setAttribute('title', muted ? 'Unmute' : `Volume ${percent}%`)
+  btnVolume?.setAttribute('aria-label', muted ? 'Unmute' : `Volume ${percent}%`)
+  btnVolume?.querySelector('.volume-icon-high')?.classList.toggle('hidden', muted)
+  btnVolume?.querySelector('.volume-icon-muted')?.classList.toggle('hidden', !muted)
+}
+
+function _setPlaybackVolume(value) {
+  const volume = Math.max(0, Math.min(1, Number(value) || 0))
+  appState.analyser?.setVolume(volume)
+  if (volumeSlider) volumeSlider.value = String(Math.round(volume * 100))
+  _syncVolumeUi(volume)
 }
 
 function _enableTransport(duration) {
   btnPlay.disabled   = false
-  btnExport.disabled = false
-  exportHint.textContent = 'Ready to export'
+  if (volumeSlider) volumeSlider.disabled = false
+  if (appState.analyser) appState.analyser.setVolume(1)
+  if (volumeSlider) volumeSlider.value = '100'
+  _syncVolumeUi(1)
+  _syncExportButtonState()
+  exportHint.textContent = isWeb()
+    ? 'Records in real time · desktop app exports MP4 faster'
+    : 'Ready to export'
+  if (btnExport) btnExport.title = exportHint.textContent
   timeTotal.textContent  = _fmtTime(duration)
-  timeCurrent.textContent = '0:00'
+  _updateScrubber(0, duration)
 }
 
 // ─── Play / Pause ─────────────────────────────────────────────────────────────
 function _togglePlayback() {
+  if (_isInteractionBlocked('playback')) return
   if (!appState.analyser) return
   if (appState.analyser.isPlaying) {
     appState.analyser.pause()
@@ -171,10 +247,35 @@ function _togglePlayback() {
 }
 
 function _pauseForExport() {
+  if (isWeb()) return
+  if (isExporting()) return
   if (!appState.analyser?.isPlaying) return
   appState.analyser.pause()
   canvasEngine.stop()
   _syncPlayIcon(false)
+}
+
+function _isInteractionBlocked(scope = 'app') {
+  const exporting = isExporting()
+  if (scope === 'playback') return exporting && !isWeb()
+  if (scope === 'editor') return exporting && !isWeb()
+  if (scope === 'session') return exporting
+  if (scope === 'app') return exporting
+  return exporting || (isWeb() && isWebExporting())
+}
+
+async function _startExportFromUi() {
+  _invalidatePendingAudioLoads()
+  const wasPlaying = !!appState.analyser?.isPlaying
+  _pauseForExport()
+
+  const started = await startExport()
+
+  if (!started && wasPlaying && appState.analyser && !_isInteractionBlocked('playback')) {
+    appState.analyser.play()
+    canvasEngine.start()
+    _syncPlayIcon(true)
+  }
 }
 
 // Stop playback and release the current audio's AudioContext (loadAudio() creates a
@@ -193,20 +294,68 @@ function _unloadAudio() {
   _syncPlayIcon(false)
 }
 
+function _revokeBlobUrl(prevPath, nextPath) {
+  if (!prevPath || prevPath === nextPath) return
+  if (!String(prevPath).startsWith('blob:')) return
+  try { URL.revokeObjectURL(prevPath) } catch {}
+}
+
 // Reset the audio-related UI back to its "nothing loaded" state — call alongside
 // _unloadAudio() whenever there's no guarantee new audio will load right after.
 function _resetAudioUI() {
   audioInfoEmpty.classList.remove('hidden')
   audioMeta.classList.add('hidden')
   btnPlay.disabled        = true
-  btnExport.disabled      = true
+  if (volumeSlider) {
+    volumeSlider.disabled = true
+    volumeSlider.value = '100'
+  }
+  _syncVolumeUi(1)
+  _syncExportButtonState()
   exportHint.textContent  = 'Load an audio file to export'
+  if (btnExport) btnExport.title = exportHint.textContent
   timeCurrent.textContent = '0:00'
   timeTotal.textContent   = '0:00'
   scrubberFill.style.width = '0%'
   scrubberThumb.style.left = '0%'
   _resetDropMessage()
   dropOverlay.classList.remove('hidden')
+  _setStudioTrackName('Open audio')
+  _setStudioTrackEmpty(true)
+}
+
+function _setStudioTrackName(name) {
+  const trackName = document.getElementById('studio-track-name')
+  if (!trackName) return
+  const full = String(name || '').trim() || 'Open audio'
+  trackName.textContent = _formatTrackLabel(full)
+  trackName.dataset.fullName = full
+}
+
+function _formatTrackLabel(name, max = 52) {
+  if (name.length <= max) return name
+  const ext = name.match(/\.[^./\\]{1,10}$/)?.[0] || ''
+  const stem = ext ? name.slice(0, -ext.length) : name
+  if (max <= ext.length + 2) return `${name.slice(0, max - 1)}…`
+  const budget = max - ext.length - 1
+  const head = Math.max(18, Math.ceil(budget * 0.7))
+  const tail = Math.max(8, budget - head)
+  return `${stem.slice(0, head)}…${stem.slice(-tail)}${ext}`
+}
+
+function _setStudioTrackEmpty(empty) {
+  const track = document.getElementById('studio-track')
+  if (!track) return
+  track.dataset.empty = empty ? 'true' : 'false'
+  const fullName = document.getElementById('studio-track-name')?.dataset.fullName || document.getElementById('studio-track-name')?.textContent
+  track.title = empty ? 'Open audio file' : (fullName || 'Open audio file')
+}
+
+function _syncExportButtonState() {
+  if (!btnExport) return
+  const enabled = !!appState.loaded
+  btnExport.disabled = !enabled
+  studioExport?.classList.toggle('is-disabled', !enabled)
 }
 
 function _onPlaybackEnded() {
@@ -227,26 +376,50 @@ export function _updateScrubber(current, duration) {
   scrubberFill.style.width  = `${pct * 100}%`
   scrubberThumb.style.left  = `${pct * 100}%`
   timeCurrent.textContent   = _fmtTime(current)
+  scrubberTrack?.setAttribute('aria-valuemax', String(duration || 0))
+  scrubberTrack?.setAttribute('aria-valuenow', String(Math.max(0, current || 0)))
+  scrubberTrack?.setAttribute('aria-valuetext', _fmtTime(current || 0))
 }
 
 let _scrubbing = false
-scrubberTrack.addEventListener('mousedown', e => {
-  if (!appState.analyser) return
+scrubberTrack.addEventListener('pointerdown', e => {
+  if (!appState.analyser || _isInteractionBlocked('playback')) return
   _scrubbing = true
+  scrubberTrack.setPointerCapture?.(e.pointerId)
   _seekFromEvent(e)
 })
-document.addEventListener('mousemove', e => {
+document.addEventListener('pointermove', e => {
   if (!_scrubbing) return
+  if (_isInteractionBlocked('playback')) { _scrubbing = false; return }
   _seekFromEvent(e)
 })
-document.addEventListener('mouseup', () => { _scrubbing = false })
+document.addEventListener('pointerup', () => { _scrubbing = false })
+scrubberTrack.addEventListener('keydown', e => {
+  if (!appState.analyser || _isInteractionBlocked('playback')) return
+  const duration = appState.audioLoader?.duration ?? 0
+  const step = e.shiftKey ? 10 : 5
+  let time = appState.analyser.currentTime
+  if (e.key === 'ArrowLeft') time -= step
+  else if (e.key === 'ArrowRight') time += step
+  else if (e.key === 'Home') time = 0
+  else if (e.key === 'End') time = duration
+  else return
+  e.preventDefault()
+  _seekToTime(time)
+})
 
 function _seekFromEvent(e) {
+  if (_isInteractionBlocked('playback')) return
   const rect = scrubberTrack.getBoundingClientRect()
   const pct  = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1))
-  const time = pct * (appState.audioLoader?.duration ?? 0)
+  _seekToTime(pct * (appState.audioLoader?.duration ?? 0))
+}
+
+function _seekToTime(time) {
+  const duration = appState.audioLoader?.duration ?? 0
+  time = Math.max(0, Math.min(time, duration))
   appState.analyser.seek(time)
-  _updateScrubber(time, appState.audioLoader?.duration ?? 0)
+  _updateScrubber(time, duration)
   // When paused, draw one frame to preview the seek position
   if (!appState.analyser.isPlaying) canvasEngine.stop()
 }
@@ -387,6 +560,10 @@ document.addEventListener('mouseup', () => {
 // ─── Drop zone: drag-and-drop ─────────────────────────────────────────────────
 dropZone.addEventListener('dragover', e => {
   e.preventDefault()
+  if (_isInteractionBlocked('session')) {
+    e.dataTransfer.dropEffect = 'none'
+    return
+  }
   e.dataTransfer.dropEffect = 'copy'
   dropZone.classList.add('drag-over')
 })
@@ -399,6 +576,7 @@ dropZone.addEventListener('dragleave', e => {
 
 dropZone.addEventListener('drop', async e => {
   e.preventDefault()
+  if (_isInteractionBlocked('session')) return
   dropZone.classList.remove('drag-over')
 
   const file = e.dataTransfer.files[0]
@@ -408,47 +586,71 @@ dropZone.addEventListener('drop', async e => {
   }
 
   const arrayBuffer = await file.arrayBuffer()
-  await loadAudio(arrayBuffer, window.api.getPathForFile(file) || file.name)
+  const objectUrl = window.api.getPathForFile?.(file)
+  await loadAudio(arrayBuffer, objectUrl || file.name, file.name)
 })
 
 // ─── File picker (button + Ctrl+O) ───────────────────────────────────────────
 async function _openFilePicker() {
+  const generation = ++_audioLoadGeneration
+  if (_isInteractionBlocked('session')) return
   const result = await window.api.openAudioFile()
   if (!result) return
+  if (_isLoadStale(generation)) {
+    _revokeBlobUrl(result.filePath, '')
+    return
+  }
 
   // result.buffer arrives as Uint8Array via structured clone (contextBridge)
   const u8  = result.buffer instanceof Uint8Array ? result.buffer : new Uint8Array(Object.values(result.buffer))
   const ab  = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength)
-  await loadAudio(ab, result.filePath)
+  await loadAudio(ab, result.filePath, result.fileName, { generation })
 }
 
 btnOpenAudio.addEventListener('click', _openFilePicker)
+document.getElementById('studio-track')?.addEventListener('click', _openFilePicker)
 
 // ─── Keyboard shortcuts ───────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
   const ctrl = e.ctrlKey || e.metaKey
 
-  if (ctrl && e.key === 'n') { e.preventDefault(); _newSession() }
-  if (ctrl && e.shiftKey && e.key.toLowerCase() === 'r') { e.preventDefault(); _resetToDefaults() }
-  if (ctrl && e.key === 'o') { e.preventDefault(); _openFilePicker() }
-  if (ctrl && e.key === 's') { e.preventDefault(); _saveProject() }
-  if (ctrl && e.key === 'e') { e.preventDefault(); if (appState.loaded) { _pauseForExport(); startExport() } }
-  if (ctrl && e.key === 'z') { e.preventDefault(); _undo() }
-  if (ctrl && e.key === 'y') { e.preventDefault(); _redo() }
-  if (ctrl && e.key === 'q') { e.preventDefault(); window.api.quit() }
   if (e.key === 'F11') { e.preventDefault(); _toggleFullscreen() }
 
-  if (e.key === ' ' && !e.target.matches('input, textarea, select')) {
-    e.preventDefault()
-    _togglePlayback()
-  }
   if (e.key === 'Escape') {
     document.getElementById('error-modal')?.classList.add('hidden')
     document.getElementById('about-modal')?.classList.add('hidden')
   }
+
+  const isPlaybackShortcut = e.key === ' ' && !e.target.matches('input, textarea, select')
+  // Ignore all editing, playback, and session shortcuts while the studio is hidden
+  const studio = document.getElementById('studio')
+  if (studio && studio.hidden) return
+
+  if (ctrl && e.key === 'n') { e.preventDefault(); _newSession() }
+  if (!isWeb() && ctrl && e.shiftKey && e.key.toLowerCase() === 'r') { e.preventDefault(); _resetToDefaults() }
+  if (ctrl && e.key === 'o') { e.preventDefault(); _openFilePicker() }
+  if (ctrl && e.key === 's') { e.preventDefault(); _saveProject() }
+  if (ctrl && e.key === 'e') { e.preventDefault(); if (appState.loaded) _startExportFromUi() }
+  if (ctrl && e.key === 'z') { e.preventDefault(); _undo() }
+  if (ctrl && e.key === 'y') { e.preventDefault(); _redo() }
+  if (ctrl && e.key === 'q') {
+    e.preventDefault()
+    if (!isWeb()) window.api.quit()
+  }
+
+  if (isPlaybackShortcut) {
+    e.preventDefault()
+    _togglePlayback()
+  }
 })
 
 btnPlay.addEventListener('click', _togglePlayback)
+
+volumeSlider?.addEventListener('input', e => _setPlaybackVolume(e.target.value / 100))
+btnVolume?.addEventListener('click', () => {
+  const current = Number(volumeSlider?.value || 0) / 100
+  _setPlaybackVolume(current > 0 ? 0 : 1)
+})
 
 // ─── Fullscreen ──────────────────────────────────────────────────────────────
 function _toggleFullscreen() {
@@ -458,6 +660,7 @@ function _toggleFullscreen() {
 
 document.addEventListener('fullscreenchange', () => {
   const isFs = !!document.fullscreenElement
+  document.body.classList.toggle('video-playmode', isFs)
   btnFullscreen?.querySelector('.icon-fs-enter')?.classList.toggle('hidden', isFs)
   btnFullscreen?.querySelector('.icon-fs-exit')?.classList.toggle('hidden', !isFs)
   btnFullscreen?.setAttribute('title', isFs ? 'Exit Fullscreen (F11)' : 'Toggle Fullscreen (F11)')
@@ -465,16 +668,13 @@ document.addEventListener('fullscreenchange', () => {
 
 btnFullscreen?.addEventListener('click', _toggleFullscreen)
 
-// ─── Collapsible side panels ──────────────────────────────────────────────────
-const leftPanelEl  = document.getElementById('left-panel')
+// ─── Collapsible inspector ────────────────────────────────────────────────────
 const rightPanelEl = document.getElementById('right-panel')
-let _leftPanelCollapsed  = false
 let _rightPanelCollapsed = false
 
 function _applyPanelWidths() {
-  const l = _leftPanelCollapsed  ? '0px' : 'var(--panel-left-width)'
-  const r = _rightPanelCollapsed ? '0px' : 'var(--panel-right-width)'
-  if (appLayout) appLayout.style.gridTemplateColumns = `${l} 1fr ${r}`
+  const r = _rightPanelCollapsed ? '0px' : 'var(--panel-inspector-width)'
+  if (appLayout) appLayout.style.gridTemplateColumns = `minmax(0, 1fr) ${r}`
 }
 
 // Wait for the collapse transition to finish before re-measuring canvas-area —
@@ -489,21 +689,26 @@ document.getElementById('app-menu-bar')?.addEventListener('transitionend', e => 
   if (e.propertyName === 'height') canvasEngine.refitPreview()
 })
 
-toggleLeftPanel?.addEventListener('click', () => {
-  _leftPanelCollapsed = !_leftPanelCollapsed
+function _setInspectorCollapsed(collapsed) {
+  _rightPanelCollapsed = collapsed
   _applyPanelWidths()
-  leftPanelEl?.classList.toggle('collapsed', _leftPanelCollapsed)
-  toggleLeftPanel.classList.toggle('collapsed', _leftPanelCollapsed)
-  toggleLeftPanel.title = _leftPanelCollapsed ? 'Expand panel' : 'Collapse panel'
-})
+  rightPanelEl?.classList.toggle('collapsed', collapsed)
+  rightPanelEl?.setAttribute('aria-hidden', collapsed ? 'true' : 'false')
+  toggleRightPanel?.classList.toggle('collapsed', collapsed)
+  const label = collapsed ? 'Expand inspector' : 'Collapse inspector'
+  if (toggleRightPanel) {
+    toggleRightPanel.title = label
+    toggleRightPanel.setAttribute('aria-expanded', String(!collapsed))
+    toggleRightPanel.setAttribute('aria-label', label)
+  }
+  requestAnimationFrame(() => canvasEngine.refitPreview())
+}
 
-toggleRightPanel?.addEventListener('click', () => {
-  _rightPanelCollapsed = !_rightPanelCollapsed
-  _applyPanelWidths()
-  rightPanelEl?.classList.toggle('collapsed', _rightPanelCollapsed)
-  toggleRightPanel.classList.toggle('collapsed', _rightPanelCollapsed)
-  toggleRightPanel.title = _rightPanelCollapsed ? 'Expand panel' : 'Collapse panel'
-})
+function _toggleInspector() {
+  _setInspectorCollapsed(!_rightPanelCollapsed)
+}
+
+toggleRightPanel?.addEventListener('click', _toggleInspector)
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function _isAudioFile(name) {
@@ -572,18 +777,32 @@ function _applySnapshot(snap) {
 }
 
 function _undo() {
+  if (_isInteractionBlocked('editor')) return
   const snap = historyManager.undo(_snapshotVS())
   if (!snap) return
   _applySnapshot(snap)
-  _setDirty()
+  _syncDirtyFromHistory()
+  _syncHistoryButtons()
 }
 
 function _redo() {
+  if (_isInteractionBlocked('editor')) return
   const snap = historyManager.redo(_snapshotVS())
   if (!snap) return
   _applySnapshot(snap)
-  _setDirty()
+  _syncDirtyFromHistory()
+  _syncHistoryButtons()
 }
+
+function _syncHistoryButtons() {
+  const undo = document.getElementById('btn-undo')
+  const redo = document.getElementById('btn-redo')
+  if (undo) undo.disabled = !historyManager.canUndo()
+  if (redo) redo.disabled = !historyManager.canRedo()
+}
+
+document.getElementById('btn-undo')?.addEventListener('click', _undo)
+document.getElementById('btn-redo')?.addEventListener('click', _redo)
 
 // Combined handler: snapshot before the change, then mark dirty.
 // Runs in capture phase so visualizerState still holds the PRE-change value.
@@ -592,18 +811,88 @@ function _onPanelControlChange() {
   clearTimeout(_historyTimer)
   _historyTimer = setTimeout(() => { _historyTimer = null }, 500)
   _setDirty()
+  _syncHistoryButtons()
 }
 
 // ─── Project: dirty tracking & title bar ─────────────────────────────────────
+function _sessionFingerprint() {
+  return JSON.stringify({
+    vs: _snapshotVS(),
+    audio: appState.filePath || appState.fileName || '',
+  })
+}
+
+function _syncDirtyFromHistory() {
+  if (_webClean && _sessionFingerprint() === _webClean) {
+    _isDirty = false
+  } else {
+    _isDirty = true
+  }
+  _updateTitleBar()
+  _updateWebSessionAlert()
+}
+
+function _updateWebSessionAlert() {
+  const el = document.getElementById('web-session-bar')
+  if (!el) return
+  if (!isWeb() || document.getElementById('studio')?.hidden) {
+    el.classList.add('hidden')
+    el.textContent = ''
+    el.removeAttribute('data-state')
+    return
+  }
+
+  if (_isDirty) {
+    el.classList.remove('hidden')
+    el.dataset.state = 'unsaved'
+    el.textContent = 'Unsaved'
+    return
+  }
+  if (_webSessionKind === 'saved') {
+    el.classList.remove('hidden')
+    el.dataset.state = 'saved'
+    el.textContent = 'Saved'
+    return
+  }
+  if (_webSessionKind === 'imported') {
+    el.classList.remove('hidden')
+    el.dataset.state = 'imported'
+    el.textContent = 'Project imported'
+    return
+  }
+  if (_webSessionKind === 'opened') {
+    el.classList.remove('hidden')
+    el.dataset.state = 'opened'
+    el.textContent = 'Project opened'
+    return
+  }
+  if (appState.loaded) {
+    el.classList.remove('hidden')
+    el.dataset.state = 'unsaved'
+    el.textContent = 'Unsaved'
+    return
+  }
+  el.classList.add('hidden')
+  el.textContent = ''
+  el.removeAttribute('data-state')
+}
+
 function _setDirty() {
   if (_isDirty) return
   _isDirty = true
   _updateTitleBar()
+  _updateWebSessionAlert()
 }
 
-function _clearDirty() {
+function _clearDirty({ exported = false, imported = false, opened = false } = {}) {
   _isDirty = false
+  _webClean = _sessionFingerprint()
+  if (exported)      _webSessionKind = 'saved'
+  else if (imported) _webSessionKind = 'imported'
+  else if (opened)  _webSessionKind = 'opened'
+  else               _webSessionKind = null
   _updateTitleBar()
+  _updateWebSessionAlert()
 }
 
 // ─── Auto-save last-used settings (debounced, global "last session") ─────────
@@ -738,38 +1027,46 @@ function _syncDomFromState(vs, es) {
 
 // ─── Project: save ────────────────────────────────────────────────────────────
 async function _saveProject() {
-  // Always suggest a .spx name — _projectFilePath may be a .spulse path if the
-  // currently-open project was imported rather than loaded, and Save always
-  // produces the local (non-portable) format regardless of how it was opened.
-  const defaultPath = _projectFilePath
-    ? _projectFilePath.replace(/\.(spx|spulse)$/i, '') + '.spx'
-    : (appState.fileName
-        ? appState.fileName.replace(/\.[^.]+$/, '') + '.spx'
-        : 'project.spx')
-  const data      = serializeState(appState.filePath || '')
-  const savedPath = await window.api.saveProject(data, defaultPath)
+  if (_isInteractionBlocked('session')) return
+  const defaultPath = isWeb()
+    ? (appState.fileName
+        ? appState.fileName.replace(/\.[^.]+$/, '') + '.spulse'
+        : 'project.spulse')
+    : (_projectFilePath
+        ? _projectFilePath.replace(/\.(spx|spulse)$/i, '') + '.spx'
+        : (appState.fileName
+            ? appState.fileName.replace(/\.[^.]+$/, '') + '.spx'
+            : 'project.spx'))
+  const data = isWeb()
+    ? await serializePortableState(appState.filePath || '')
+    : serializeState(appState.filePath || '')
+  const savedPath = isWeb()
+    ? await window.api.exportProject(data, defaultPath)
+    : await window.api.saveProject(data, defaultPath)
   if (!savedPath) return   // user cancelled
   _projectFilePath = savedPath
-  _clearDirty()
+  _clearDirty({ exported: isWeb() })
   _updateTitleBar()
   window.api.recordRecentProject?.(savedPath)
   window.api.saveLastSession(_currentLastSessionPayload())
   const hint = document.getElementById('project-hint')
-  if (hint) { hint.textContent = 'Saved ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
+  if (hint) { hint.textContent = isWeb() ? 'Downloaded' : 'Saved'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
 }
 
 // ─── Project: export (portable — see Feature C, base64-embedded assets) ───────
 // Distinct from _saveProject(): does not touch _projectFilePath/dirty tracking, since
 // the exported file is a portable copy, not the user's currently-open project file.
 async function _exportProject() {
+  if (_isInteractionBlocked('session')) return
   const defaultPath = appState.fileName
     ? appState.fileName.replace(/\.[^.]+$/, '') + '.spulse'
     : 'project.spulse'
   const data      = await serializePortableState(appState.filePath || '')
   const savedPath = await window.api.exportProject(data, defaultPath)
   if (!savedPath) return   // user cancelled
+  if (isWeb()) _clearDirty({ exported: true })
   const hint = document.getElementById('project-hint')
-  if (hint) { hint.textContent = 'Exported ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
+  if (hint) { hint.textContent = 'Exported ✓'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
 }
 
 // ─── Audio: reload from an explicit path (project restore, of any kind) ──────
@@ -787,7 +1084,7 @@ async function _reloadAudioFromPath(audioPath) {
       ? audioResult.buffer
       : new Uint8Array(Object.values(audioResult.buffer))
     const ab = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength)
-    await loadAudio(ab, audioResult.filePath)
+    await loadAudio(ab, audioResult.filePath, audioResult.fileName, { markDirty: false })
   }
 }
 
@@ -808,7 +1105,7 @@ function _currentLastSessionPayload() {
 // `data.audioPath` is always '' (the real audio lives in `data.audioAsset`) — only
 // deserializeState()'s returned `audioPath` (resolved to a temp file) is usable. For a
 // legacy v1.0 file this ordering is a no-op change (deserializeState doesn't touch audio).
-async function _applyProjectData(projectPath, data, { recordRecent = true } = {}) {
+async function _applyProjectData(projectPath, data, { recordRecent = true, webOpened = false } = {}) {
   // Start from a clean slate first — otherwise a field missing from `data` (e.g. an
   // older-schema project file) would silently inherit whatever was live in memory from
   // the previous session instead of falling back to a proper default, and any
@@ -819,6 +1116,7 @@ async function _applyProjectData(projectPath, data, { recordRecent = true } = {}
   resetExportSettingsToDefaults()
 
   const { audioPath } = await deserializeState(data)
+  if (isWeb()) capWebExport(exportSettings)
   await _reloadAudioFromPath(audioPath)
 
   // Sync all DOM controls to the restored state
@@ -828,7 +1126,9 @@ async function _applyProjectData(projectPath, data, { recordRecent = true } = {}
   backgroundRenderer.reloadFromState(visualizerState.background)
 
   _projectFilePath = projectPath
-  _clearDirty()
+  if (isWeb() && webOpened === 'imported') _clearDirty({ imported: true })
+  else if (isWeb() && webOpened === 'opened') _clearDirty({ opened: true })
+  else _clearDirty()
   _updateTitleBar()
 
   // Persist immediately (not the debounced settings-change path) so quitting
@@ -844,11 +1144,12 @@ async function _applyProjectData(projectPath, data, { recordRecent = true } = {}
 
 // ─── Project: load ────────────────────────────────────────────────────────────
 async function _loadProject() {
+  if (_isInteractionBlocked('session')) return
   const result = await window.api.loadProject()
   if (!result) return   // user cancelled
-  await _applyProjectData(result.filePath, result.data)
+  await _applyProjectData(result.filePath, result.data, { webOpened: isWeb() ? 'opened' : false })
   const hint = document.getElementById('project-hint')
-  if (hint) { hint.textContent = 'Project loaded ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
+  if (hint) { hint.textContent = 'Project loaded ✓'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
 }
 
 // ─── Project: open from an OS-triggered file (double-click, "Open with", or a
@@ -858,13 +1159,14 @@ async function _loadProject() {
 // (user-initiated via a dialog they just confirmed), this can arrive at any time, so
 // it checks for unsaved changes first — same confirm() pattern as _newSession().
 async function _openProjectFile({ filePath, data }) {
+  if (_isInteractionBlocked('session')) return
   if (_isDirty) {
     const name = filePath.replace(/.*[\\/]/, '')
     if (!confirm(`Discard unsaved changes and open "${name}"?`)) return
   }
-  await _applyProjectData(filePath, data)
+  await _applyProjectData(filePath, data, { webOpened: isWeb() ? 'opened' : false })
   const hint = document.getElementById('project-hint')
-  if (hint) { hint.textContent = 'Project opened ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
+  if (hint) { hint.textContent = 'Project opened ✓'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
 }
 
 // ─── Project: import (portable — see Feature C, base64-embedded assets) ───────
@@ -873,31 +1175,38 @@ async function _openProjectFile({ filePath, data }) {
 // its dialog title and hint text (kept distinct for the same UX-clarity reason as
 // _exportProject() vs _saveProject()).
 async function _importProject() {
+  if (_isInteractionBlocked('session')) return false
   const result = await window.api.importProject()
-  if (!result) return   // user cancelled
-  await _applyProjectData(result.filePath, result.data, { recordRecent: false })
+  if (!result) return false
+  await _applyProjectData(result.filePath, result.data, { recordRecent: false, webOpened: isWeb() ? 'imported' : false })
   const hint = document.getElementById('project-hint')
-  if (hint) { hint.textContent = 'Project imported ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
+  if (hint) { hint.textContent = 'Project imported ✓'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
+  return true
 }
 
 // ─── Project: reset visualizer/export settings to their hardcoded defaults ────
 // Also overwrites last-session.json immediately (not the debounced auto-save path)
 // so a relaunch right after reset doesn't restore the pre-reset state.
 function _resetToDefaults() {
-  resetVisualizerStateToDefaults()
+  if (_isInteractionBlocked('editor')) return
+  const alreadyAtDefaults = isVisualizerStateAtDefaults() && isExportSettingsAtDefaults()
   resetExportSettingsToDefaults()
+  resetVisualizerStateToDefaults()
   _syncDomFromState(visualizerState, exportSettings)
   clearTimeout(_autoSaveTimer)
   window.api.saveLastSession(_currentLastSessionPayload())
-  _setDirty()
+  if (!alreadyAtDefaults) {
+    _setDirty()
+  }
   const hint = document.getElementById('project-hint')
-  if (hint) { hint.textContent = 'Reset to default ✓'; setTimeout(() => { hint.textContent = 'Ctrl+S to save' }, 2000) }
+  if (hint) { hint.textContent = 'Reset to default ✓'; setTimeout(() => { hint.textContent = _defaultProjectHint() }, 2000) }
 }
 
 // ─── Project: new session (unload audio + reset settings + clear project file) ─
 // A superset of _resetToDefaults(): also unloads whatever audio is currently loaded
 // and clears the open-project association, for a true "start from scratch" reset.
 function _newSession() {
+  if (_isInteractionBlocked('session')) return
   if (_isDirty && !confirm('Discard unsaved changes and start a new session?')) return
 
   _unloadAudio()
@@ -908,6 +1217,9 @@ function _newSession() {
   // _projectFilePath already cleared, not the just-abandoned project's path.
   historyManager.clear()
   _projectFilePath = null
+  _webSessionKind = null
+  _webClean = null
+  _syncHistoryButtons()
 
   // Reset visualizer/export settings to defaults — reuses the existing Reset to
   // Default flow (including its immediate last-session.json overwrite).
@@ -917,6 +1229,7 @@ function _newSession() {
   _updateTitleBar()
   const hint = document.getElementById('project-hint')
   if (hint) hint.textContent = 'New session ✓'
+  if (isWeb()) enterHome()
 }
 
 // ─── Register visualizer modes ────────────────────────────────────────────────
@@ -940,7 +1253,83 @@ backgroundRenderer.initFilePickers(visualizerState.background)
 initOverlayControls(visualizerState.overlay)
 
 // ─── Wire export button ───────────────────────────────────────────────────────
-document.getElementById('btn-export')?.addEventListener('click', () => { _pauseForExport(); startExport() })
+document.getElementById('btn-export')?.addEventListener('click', () => {
+  if (!appState.loaded) return
+  _startExportFromUi()
+})
+
+function enterHome() {
+  const home = document.getElementById('home-screen')
+  const studio = document.getElementById('studio')
+  if (home) home.hidden = false
+  if (studio) studio.hidden = true
+  document.body.classList.add('home-active')
+  document.body.classList.remove('studio-active')
+  document.getElementById('web-session-bar')?.classList.add('hidden')
+  document.getElementById('skip-link')?.setAttribute('href', '#home-new')
+}
+
+function enterStudio() {
+  const home = document.getElementById('home-screen')
+  const studio = document.getElementById('studio')
+  if (home) home.hidden = true
+  if (studio) studio.hidden = false
+  document.body.classList.remove('home-active')
+  document.body.classList.add('studio-active')
+  _updateWebSessionAlert()
+  document.getElementById('skip-link')?.setAttribute('href', '#center-panel')
+  requestAnimationFrame(() => canvasEngine.refitPreview())
+}
+
+function applyWebChrome() {
+  if (!isWeb()) {
+    enterStudio()
+    return
+  }
+  document.body.dataset.platform = 'web'
+  document.querySelectorAll('.desktop-only').forEach(el => el.classList.add('hidden'))
+  const label = document.getElementById('btn-export-label')
+  if (label) label.textContent = 'Export video'
+  const exportHintEl = document.getElementById('export-hint')
+  if (exportHintEl && !appState.loaded) {
+    exportHintEl.textContent = 'Load an audio file to export WebM'
+    btnExport.title = exportHintEl.textContent
+  }
+  const hint = document.getElementById('project-hint')
+  if (hint) hint.textContent = _defaultProjectHint()
+  document.getElementById('about-web-note')?.classList.remove('hidden')
+  document.getElementById('about-edition')?.classList.remove('hidden')
+  document.getElementById('project-web-caption')?.classList.remove('hidden')
+
+  const menuSave = document.querySelector('[data-action="save-project"]')
+  const menuLoad = document.querySelector('[data-action="load-project"]')
+  if (menuSave) menuSave.textContent = 'Export Project'
+  if (menuLoad) menuLoad.textContent = 'Open Project'
+
+  const btnSave = document.getElementById('btn-save-project')
+  const btnLoad = document.getElementById('btn-load-project')
+  if (btnSave) btnSave.textContent = 'Export'
+  if (btnLoad) btnLoad.textContent = 'Open'
+
+  applyWebExportLimitsToDom()
+  enterHome()
+}
+
+window.addEventListener('beforeunload', e => {
+  if (!isWeb()) return
+  if (_isDirty) {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+})
+
+applyWebChrome()
+_syncExportButtonState()
+
+document.getElementById('home-new')?.addEventListener('click', () => enterStudio())
+document.getElementById('home-import')?.addEventListener('click', async () => {
+  if (await _importProject()) enterStudio()
+})
 
 // ─── Wire right-panel export settings controls ────────────────────────────────
 function _initExportControls() {
@@ -1075,7 +1464,6 @@ document.getElementById('right-panel')?.addEventListener('input',  _scheduleAuto
 initLeftPanel(appState, visualizerState)
 
 // ─── Wire panel tab bars ──────────────────────────────────────────────────────
-initPanelTabs(document.getElementById('left-panel'))
 initPanelTabs(document.getElementById('right-panel'))
 
 // ─── Wire app menu → renderer actions ────────────────────────────────────────
@@ -1110,14 +1498,17 @@ initMenuBar({
 // ─── Init UI components ───────────────────────────────────────────────────────
 initErrorDialog()
 initAboutScreen()
+initConfirmDialog()
+initTheme()
+_syncHistoryButtons()
 
 // ─── Detect GPU encoders on startup ──────────────────────────────────────────
-window.api.detectGpuEncoders?.().then(info => {
-  if (info) { _detectedGpu = info; _updateEncoderBadge() }
-})
-
-// ─── Auto-update banner ───────────────────────────────────────────────────────
 initUpdateBanner()
+if (!isWeb()) {
+  window.api.detectGpuEncoders?.().then(info => {
+    if (info) { _detectedGpu = info; _updateEncoderBadge() }
+  })
+}
 
 // ─── Sync DOM + reload audio/background for the auto-loaded session (if any) ─
 // Runs last, after every control-wiring call above and after all module-level
@@ -1130,6 +1521,15 @@ if (_lastSession) {
   // exactly what was already saved. _clearDirty() after, matching how
   // _applyProjectData() ends every one of its own restore paths the same way.
   await _reloadAudioFromPath(_lastSessionAudioPath)
+  _clearDirty()
+  _updateTitleBar()
+} else if (isWeb()) {
+  // Browser refresh is a clean-session boundary: reset the model first, then
+  // sync every inspector control so stale browser state cannot leak into the UI.
+  resetVisualizerStateToDefaults()
+  resetExportSettingsToDefaults()
+  _syncDomFromState(visualizerState, exportSettings)
+  backgroundRenderer.reloadFromState(visualizerState.background)
   _clearDirty()
   _updateTitleBar()
 }

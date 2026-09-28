@@ -1,11 +1,14 @@
 # This Makefile is an optional convenience wrapper for Unix-like shells
 # (Linux/macOS/WSL). Windows contributors without Make installed should use the
 # npm scripts directly: npm start, npm run build*, npm run icon, npm run clean.
-.PHONY: run build build-win build-win-portable build-mac build-linux icon install clean
+.PHONY: run run-web build build-win build-win-portable build-mac build-linux icon install clean
 
 # ── Dev ───────────────────────────────────────────────────────────────────────
 run:
 	npm start
+
+run-web:
+	npm run start:web
 
 install:
 	npm install

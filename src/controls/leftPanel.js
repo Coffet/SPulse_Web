@@ -119,14 +119,20 @@ export function initLeftPanel(appState, visualizerState) {
   setupSlider(
     $('line-width'), $('line-width-val'),
     v => `${v}px`,
-    v => { visualizerState.lineWidth = v }
+    v => {
+      visualizerState.lineWidth = v
+      if (!window.appState?.analyser?.isPlaying) window.canvasEngine?.stop()
+    }
   )
 
   // ─── Canvas Padding ────────────────────────────────────────────────────────
   setupSlider(
     $('canvas-padding'), $('canvas-padding-val'),
     v => `${v}px`,
-    v => { visualizerState.padding = Math.round(v) }
+    v => {
+      visualizerState.padding = Math.round(v)
+      if (!window.appState?.analyser?.isPlaying) window.canvasEngine?.stop()
+    }
   )
 
   // ─── Smoothing ────────────────────────────────────────────────────────────
