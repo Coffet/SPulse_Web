@@ -7,8 +7,8 @@ export function drawLineSmooth(ctx, freqData, timeData, state, W, H) {
 
   // See barClassic.js — layout in real target-resolution space, scaled down to
   // actual canvas pixel space, so preview matches export regardless of canvas size.
-  const targetW = exportSettings.width  || W
-  const targetH = exportSettings.height || H
+  const targetW = state.exportWidth  || exportSettings.width  || W
+  const targetH = state.exportHeight || exportSettings.height || H
 
   const centerY   = centerVertically ? targetH / 2 + yOffset : targetH * 0.65 + yOffset
   const amplitude = (centerVertically ? targetH / 2 : targetH * 0.3) - padding

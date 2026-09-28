@@ -6,8 +6,8 @@ export function drawRadialPulse(ctx, freqData, timeData, state, W, H) {
 
   // See barClassic.js — layout in real target-resolution space, scaled down to
   // actual canvas pixel space, so preview matches export regardless of canvas size.
-  const targetW = exportSettings.width  || W
-  const targetH = exportSettings.height || H
+  const targetW = state.exportWidth  || exportSettings.width  || W
+  const targetH = state.exportHeight || exportSettings.height || H
 
   const cx = targetW / 2
   const cy = targetH / 2 + yOffset

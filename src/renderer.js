@@ -1046,7 +1046,11 @@ function _syncDomFromState(vs, es) {
 
 // ─── Project: save ────────────────────────────────────────────────────────────
 async function _saveProject() {
-  if (_isInteractionBlocked('session')) return
+  // Saving only serializes current state and is safe mid-export on web (the
+  // export runs off a frozen snapshot + background recording), so keep Ctrl+S
+  // working while a web video export is in progress. Desktop stays blocked via
+  // the progress modal.
+  if (_isInteractionBlocked('session') && !isWeb()) return
   const defaultPath = isWeb()
     ? (appState.fileName
         ? appState.fileName.replace(/\.[^.]+$/, '') + '.spulse'
@@ -1076,7 +1080,9 @@ async function _saveProject() {
 // Distinct from _saveProject(): does not touch _projectFilePath/dirty tracking, since
 // the exported file is a portable copy, not the user's currently-open project file.
 async function _exportProject() {
-  if (_isInteractionBlocked('session')) return
+  // Same rationale as _saveProject(): portable export is read-only over state,
+  // so it can run during a web video export without affecting the recording.
+  if (_isInteractionBlocked('session') && !isWeb()) return
   const defaultPath = appState.fileName
     ? appState.fileName.replace(/\.[^.]+$/, '') + '.spulse'
     : 'project.spulse'

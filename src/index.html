@@ -763,14 +763,9 @@
   </div>
   </div><!-- /studio -->
 
-  <!-- Export Progress Modal — SUPERSEDED BY #studio-mission-wrap (Export Process menu).
-       The mission wrap in the top bar now owns the whole export UX: progress, pause,
-       resume, cancel, download and dismissal. progressModal.js is kept as a state-only
-       progress reporter that always runs in "minimized" mode, so this dialog is no
-       longer rendered. Commented out rather than deleted so it can be restored.
-       To bring the dialog back: uncomment this block, then re-enable the auto-minimize
-       branch in src/export/progressModal.js show() and the "Details" action in
-       src/export/exportMissionManager.js.
+  <!-- Export Progress Modal — the desktop (Electron) FFmpeg export dialog.
+       Web exports auto-minimize into the Export Process menu (#studio-mission-wrap);
+       see progressModal.js show(). -->
 
   <div id="export-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal export-modal-content">
@@ -795,8 +790,6 @@
       </div>
     </div>
   </div>
-
-  -->
 
   <!-- Error Dialog -->
   <div id="error-modal" class="modal-overlay hidden" role="alertdialog" aria-modal="true">

@@ -10,6 +10,7 @@ import { showErrorDialog } from '../ui/errorDialog.js'
 import { showConfirmDialog } from '../ui/confirmDialog.js'
 import { isWeb }           from '../platform/webApi.js'
 import { exportMissionManager } from './exportMissionManager.js'
+import { snapshotVisualizerState } from '../visualizer/visualizerState.js'
 
 export const WEB_MAX_PIXELS = 1920 * 1080
 export const WEB_MAX_FPS    = 30
@@ -151,15 +152,6 @@ export async function startWebExport() {
 
 async function _runWebExport(appState, settingsSnapshot = null, existingTask = null) {
 
-  if (document.visibilityState !== 'visible') {
-    if (existingTask) exportMissionManager.cancelTask(existingTask.id)
-    showErrorDialog(
-      'Keep window in foreground',
-      'Browser recording only works while this tab/window is visible. Bring SPulse to the foreground and try export again.',
-    )
-    return false
-  }
-
   const mime = pickRecorderMime()
   if (!mime) {
     if (existingTask) exportMissionManager.cancelTask(existingTask.id)
@@ -196,7 +188,6 @@ async function _runWebExport(appState, settingsSnapshot = null, existingTask = n
   const btnExport = document.getElementById('btn-export')
 
   let cancelled = false
-  let cancelReason = ''
   let rec = null
   let dest = null
   let canvasStream = null
@@ -226,9 +217,8 @@ async function _runWebExport(appState, settingsSnapshot = null, existingTask = n
     exportAnalyser.play()
   }
 
-  const cancelRecording = (reason = 'user') => {
+  const cancelRecording = () => {
     cancelled = true
-    cancelReason = reason
     try { rec?.state === 'recording' && rec.stop() } catch { /* ignore */ }
     exportAnalyser.stop()
   }
@@ -236,12 +226,17 @@ async function _runWebExport(appState, settingsSnapshot = null, existingTask = n
   exportMissionManager.setTaskController(missionTask.id, {
     pause: pauseRecording,
     resume: resumeRecording,
-    cancel: () => cancelRecording('user'),
+    cancel: cancelRecording,
   })
 
   const onVisibilityChange = () => {
-    if (document.visibilityState === 'hidden' && !cancelled) {
-      cancelRecording('background')
+    // Keep the export alive while the tab is hidden: RAF stops in background
+    // tabs, so switch the export canvas to a timer loop that the browser
+    // throttles but still runs. Audio keeps playing via the AudioContext.
+    if (document.visibilityState === 'hidden') {
+      exportCanvasEngine.startBackgroundRender()
+    } else {
+      exportCanvasEngine.stopBackgroundRender()
     }
   }
 
@@ -249,13 +244,16 @@ async function _runWebExport(appState, settingsSnapshot = null, existingTask = n
     try { dest && exportAnalyser.analyserNode.disconnect(dest) } catch { /* already disconnected */ }
   }
 
-  progressModal.init(() => {
-    cancelRecording('user')
-  })
+  progressModal.init(cancelRecording)
   progressModal.show(totalFrames, {
     title: 'Recording video…',
     realtime: true,
   })
+
+  // Freeze the visualizer configuration for this recording so the user can keep
+  // using the UI while the export runs without those edits leaking into the video
+  // (desktop blocks interaction with the progress modal instead).
+  exportCanvasEngine.setExportState(snapshotVisualizerState({ exportWidth: w, exportHeight: h }))
 
   document.addEventListener('visibilitychange', onVisibilityChange)
 
@@ -330,12 +328,6 @@ async function _runWebExport(appState, settingsSnapshot = null, existingTask = n
     if (cancelled) {
       exportMissionManager.cancelTask(missionTask.id)
       progressModal.hide()
-      if (cancelReason === 'background') {
-        showErrorDialog(
-          'Recording interrupted',
-          'Browser recording paused because SPulse was in the background. Keep this window visible during export and try again.',
-        )
-      }
       return true
     }
 
@@ -364,6 +356,8 @@ async function _runWebExport(appState, settingsSnapshot = null, existingTask = n
     exportAnalyser.onEnded = null
     exportAudioContext.close().catch(() => {})
     releaseCanvas?.()
+    exportCanvasEngine.stopBackgroundRender()
+    exportCanvasEngine.clearExportState()
   }
 }
 

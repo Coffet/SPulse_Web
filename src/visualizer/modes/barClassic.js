@@ -15,8 +15,8 @@ export function drawBarClassic(ctx, freqData, timeData, state, W, H) {
   // Without this, fixed-px style values (padding, barWidth, glow blur) would render
   // at different relative proportions between preview (capped canvas size) and
   // export (true target size), so preview wouldn't match the exported output.
-  const targetW = exportSettings.width  || W
-  const targetH = exportSettings.height || H
+  const targetW = state.exportWidth  || exportSettings.width  || W
+  const targetH = state.exportHeight || exportSettings.height || H
 
   // numBars is authoritative (Feature B) — barWidth derives from it instead of the
   // other way around, so exactly numBars bars fill the available width.
