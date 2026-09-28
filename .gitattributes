@@ -1,0 +1,8 @@
+# Normalize all text files to LF in the repo and in every checkout (including
+# Windows), regardless of each contributor's editor or core.autocrlf setting.
+* text=auto eol=lf
+
+# Binary assets — never touch line endings.
+*.png  binary
+*.ico  binary
+*.icns binary
