@@ -11,6 +11,7 @@ import { visualizerState }  from '../visualizer/visualizerState.js'
 import { analyzeOffline }   from '../audio/offlineFrequencyAnalyser.js'
 import { isWeb }            from '../platform/webApi.js'
 import { startWebExport, isWebExporting }   from './webRecorder.js'
+import { exportMissionManager } from './exportMissionManager.js'
 
 // Silence fallback for any export frame whose real FFT data wasn't captured
 // (export cancelled mid-analysis, or a rendering edge case at the very end of
@@ -84,20 +85,47 @@ export async function startExport() {
     confirmedPath: exportSettings.askOnExport,
   }
 
-  // ── Progress modal ──────────────────────────────────────────────────────────
-  progressModal.init(() => {
+  // ── Export progress (mission menu) ──────────────────────────────────────────
+  // The desktop FFmpeg pipeline can't pause/resume (frames stream in one shot),
+  // so its task card offers Cancel only.
+  const missionTask = exportMissionManager.registerTask({
+    title: `${appState.fileName || 'Visualizer'} export`,
+    filename: outFilename,
+    totalFrames,
+    canPause: false,
+  })
+
+  const cancelExport = () => {
     _cancelled = true
     window.api.exportCancel()
-  })
+  }
+
+  exportMissionManager.setTaskController(missionTask.id, { cancel: cancelExport })
+
+  // progressModal still computes ETA/fps from the shared start timestamp; its own
+  // dialog markup is gone (see index.html), so it runs as a state-only reporter.
+  progressModal.init(cancelExport)
   progressModal.show(totalFrames)
 
   // Register main-process event handlers
   window.api.removeExportListeners()
-  window.api.onExportProgress(d => progressModal.update(d.framesWritten, totalFrames))
+  window.api.onExportProgress(d => {
+    progressModal.update(d.framesWritten, totalFrames)
+    exportMissionManager.updateProgress(missionTask.id, {
+      framesDone: d.framesWritten,
+      totalFrames,
+    })
+  })
   window.api.onExportComplete(d => {
     progressModal.complete(d.outputPath)
+    const savedPath = d.outputPath || outputPath
+    exportMissionManager.completeTask(missionTask.id, {
+      filename: savedPath.replace(/.*[\\/]/, '') || outFilename,
+      outputPath: savedPath,
+    })
   })
   window.api.onExportError(d => {
+    exportMissionManager.cancelTask(missionTask.id)
     progressModal.hide()
     showErrorDialog('Export Failed', d.error || 'FFmpeg returned a non-zero exit code.', d.log || '')
   })
@@ -161,17 +189,30 @@ export async function startExport() {
       // extra encode/decode pass base64 costs on both sides of the IPC call.
       const buffer = await canvasEngine.r2d.toArrayBuffer('image/jpeg', 0.92)
       await window.api.exportFrame(buffer, frame)
-      progressModal.update(frame + 1, totalFrames)
+      const prog = progressModal.update(frame + 1, totalFrames)
+      exportMissionManager.updateProgress(missionTask.id, {
+        framesDone: frame + 1,
+        totalFrames,
+        etaText: prog.etaText || 'Exporting…',
+        rateFps: prog.rate || null,
+      })
     }
 
     if (_cancelled) {
+      exportMissionManager.cancelTask(missionTask.id)
       progressModal.hide()
     } else {
       progressModal.setMessage('Encoding video…')
+      exportMissionManager.updateProgress(missionTask.id, {
+        framesDone: totalFrames,
+        totalFrames,
+        etaText: 'Encoding video…',
+      })
       await window.api.exportDone()
     }
 
   } catch (err) {
+    exportMissionManager.cancelTask(missionTask.id)
     progressModal.hide()
     showErrorDialog('Export Error', err.message)
     console.error('Export pipeline error:', err)

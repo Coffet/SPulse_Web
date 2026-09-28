@@ -307,17 +307,23 @@ async function _runWebExport(appState, settingsSnapshot = null, existingTask = n
       })
     }, 250)
 
-    await Promise.race([
-      ended,
-      new Promise(resolve => {
-        const id = setInterval(() => {
-          if (cancelled) { clearInterval(id); resolve() }
-        }, 100)
-      }),
-    ])
-    clearInterval(tick)
+    let cancelPollId = null
+    try {
+      await Promise.race([
+        ended,
+        stopped,
+        new Promise(resolve => {
+          cancelPollId = setInterval(() => {
+            if (cancelled) { clearInterval(cancelPollId); cancelPollId = null; resolve() }
+          }, 100)
+        }),
+      ])
+    } finally {
+      if (cancelPollId) clearInterval(cancelPollId)
+      clearInterval(tick)
+    }
 
-    if (rec.state === 'recording') rec.stop()
+    if (rec.state !== 'inactive') rec.stop()
     exportAnalyser.stop()
     await stopped
 

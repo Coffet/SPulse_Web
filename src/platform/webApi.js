@@ -231,7 +231,11 @@ function createWebApi() {
     },
     installUpdate: _asyncFalse,
     downloadUpdate: async () => {
-      location.reload()
+      // A plain reload can serve the stale bundle from the HTTP cache. Bust the
+      // cache with a unique query param so the freshly deployed build actually loads.
+      const url = new URL(window.location.href)
+      url.searchParams.set('_reload', String(Date.now()))
+      window.location.replace(url)
     },
 
     downloadBlob: _downloadBlob,

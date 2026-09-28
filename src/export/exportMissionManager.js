@@ -2,7 +2,7 @@
 // with circular progress and an Export Process dropdown menu.
 // Enables multi-export queueing, pausing, resuming, cancelling,
 // and minimizing / replacing the export progress modal.
-// Scope: Web platform.
+// Scope: Web (MediaRecorder) and desktop (FFmpeg pipeline) exports.
 
 import { isWeb } from '../platform/webApi.js'
 import { progressModal } from './progressModal.js'
@@ -127,6 +127,9 @@ class ExportMissionManager {
           case 'cancel':
             this.cancelTask(taskId)
             break
+          case 'reveal':
+            this.revealTask(taskId)
+            break
           // 'dialog' action removed — it called progressModal.restore() to
           // re-open `#export-modal`, which is commented out in index.html.
           // case 'dialog':
@@ -190,7 +193,7 @@ class ExportMissionManager {
 
   // ─── Task Registration & Queueing ──────────────────────────────────────────
 
-  registerTask({ id, title, filename, totalFrames, controller, startFn }) {
+  registerTask({ id, title, filename, totalFrames, controller, startFn, canPause }) {
     this.init()
 
     const status = 'recording'
@@ -207,6 +210,8 @@ class ExportMissionManager {
       rateFps: null,
       controller: controller || {},
       startFn: startFn || null,
+      canPause: canPause !== false,   // desktop FFmpeg can't pause/resume mid-stream
+      outputPath: null,               // set on completion so desktop can "Open folder"
       createdAt: Date.now(),
     }
 
@@ -297,7 +302,7 @@ class ExportMissionManager {
   // `filename` only — the file itself is not retained. The web export triggers
   // the browser download as soon as recording stops, so holding a finished
   // video Blob here would just pin hundreds of MB for the rest of the session.
-  completeTask(taskId, { filename } = {}) {
+  completeTask(taskId, { filename, outputPath } = {}) {
     const task = this.tasks.find(t => t.id === taskId)
     if (!task) return
 
@@ -306,6 +311,7 @@ class ExportMissionManager {
     task.framesDone = task.totalFrames
     task.etaText = 'Completed ✓'
     if (filename) task.filename = filename
+    if (outputPath) task.outputPath = outputPath
 
     if (this.activeTaskId === taskId) {
       this.activeTaskId = null
@@ -325,6 +331,12 @@ class ExportMissionManager {
       this._syncTopBarIcon()
       this._renderTaskList()
     }
+  }
+
+  revealTask(taskId) {
+    const task = this.tasks.find(t => t.id === taskId)
+    if (!task?.outputPath) return
+    window.api?.revealInFolder?.(task.outputPath)
   }
 
   clearFinished() {
@@ -519,11 +531,14 @@ class ExportMissionManager {
     //           title="Show progress dialog">Details</button>
 
     if (task.status === 'recording') {
-      actionsHtml = `
-        <button type="button" class="btn-xs btn-mission-pause" data-action="pause" data-task-id="${task.id}" title="Pause export">
+      const pauseBtn = task.canPause
+        ? `<button type="button" class="btn-xs btn-mission-pause" data-action="pause" data-task-id="${task.id}" title="Pause export">
           ${ICON.pause}
           Pause
-        </button>
+        </button>`
+        : ''
+      actionsHtml = `
+        ${pauseBtn}
         <button type="button" class="btn-xs btn-mission-cancel" data-action="cancel" data-task-id="${task.id}" title="Cancel export">
           ${ICON.stop}
           Cancel
@@ -548,10 +563,16 @@ class ExportMissionManager {
         </button>
       `
     } else if (task.status === 'completed') {
-      // No "save again" button: the web export hands the file to the browser
-      // the moment it finishes (see webRecorder.js), so re-downloading would
-      // duplicate an action the user has already had happen.
+      // Desktop FFmpeg writes a real file on disk, so offer "Open folder" when a
+      // path is known. Web exports hand the file to the browser instead (see
+      // webRecorder.js), so there is no path to reveal and no re-save action.
+      const revealBtn = task.outputPath
+        ? `<button type="button" class="btn-xs btn-mission-reveal" data-action="reveal" data-task-id="${task.id}" title="Open folder">
+          Open folder
+        </button>`
+        : ''
       actionsHtml = `
+        ${revealBtn}
         <button type="button" class="btn-xs btn-mission-dismiss" data-action="dismiss" data-task-id="${task.id}" title="Remove from list">
           ${ICON.close}
           Dismiss
