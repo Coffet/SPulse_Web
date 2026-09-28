@@ -4,14 +4,30 @@ function _systemTheme() {
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
 }
 
+// Desktop (Electron) defaults to dark; only the web build follows the OS theme
+// until the user picks one. preload.js exposes window.api.platform ('win32',
+// 'darwin', …) before any page script runs, so any value other than 'web' means
+// desktop. Keep in sync with themeBoot.js.
+function _isDesktop() {
+  return typeof window.api?.platform === 'string' && window.api.platform !== 'web'
+}
+
+function _defaultTheme() {
+  return _isDesktop() ? 'dark' : _systemTheme()
+}
+
 export function getTheme() {
   return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'
 }
 
-export function setTheme(theme) {
+// Only an explicit choice (the toggle) is persisted — the default is re-derived
+// on each launch, so web keeps following the OS until the user picks a theme.
+export function setTheme(theme, { persist = true } = {}) {
   const next = theme === 'light' ? 'light' : 'dark'
   document.documentElement.dataset.theme = next
-  try { localStorage.setItem(STORAGE_KEY, next) } catch { /* ignore quota / private mode */ }
+  if (persist) {
+    try { localStorage.setItem(STORAGE_KEY, next) } catch { /* ignore quota / private mode */ }
+  }
   _syncToggle(next)
 }
 
@@ -34,15 +50,17 @@ export function initTheme() {
   const stored = (() => {
     try { return localStorage.getItem(STORAGE_KEY) } catch { return null }
   })()
-  const theme = stored === 'light' || stored === 'dark' ? stored : _systemTheme()
-  setTheme(theme)
+  if (stored === 'light' || stored === 'dark') setTheme(stored)
+  else setTheme(_defaultTheme(), { persist: false })
 
   document.getElementById('btn-theme')?.addEventListener('click', toggleTheme)
 
+  // Web only: follow OS theme changes until the user picks one explicitly.
+  if (_isDesktop()) return
   window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
     try {
       if (localStorage.getItem(STORAGE_KEY)) return
     } catch { /* follow system */ }
-    setTheme(e.matches ? 'light' : 'dark')
+    setTheme(e.matches ? 'light' : 'dark', { persist: false })
   })
 }
